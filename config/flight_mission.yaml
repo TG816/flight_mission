@@ -1,0 +1,21 @@
+
+
+ # 基础控制参数
+
+  err_max: 0.2                # 位置误差最大阈值（米）
+  if_debug: 0                 # 0=手动offboard，1=自动offboard
+  
+  # 飞行核心参数
+  zero_plane_height: 0.2      # 地面零平面高度
+  height_threshold: 0.05      # 降落高度阈值
+  
+  # 雷达参数
+  min_range: 0.1              # 雷达最小检测距离（米）
+  max_range: 30.0             # 雷达最大检测距离（米）
+  num_bins: 360               # 雷达角度分bin数量
+  
+  # 地图与避障参数
+  map_cellsize: 0.10          # 栅格地图分辨率（米/格）
+  map_width: 10.0             # 地图宽度（米）
+  map_length: 10.0            # 地图长度（米）
+  

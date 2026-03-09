@@ -1,0 +1,5 @@
+<launch>
+  <node pkg="flight_mission" type="flight_mission" name="" output="screen">
+    <rosparam command="load" file="$(find flight_mission)/config/flight_mission.yaml" />
+  </node>
+</launch>
