@@ -70,7 +70,7 @@ void find_obstacal()
     }
 }
 
-GridPoint out_of_danger(const GridPoint &now, int mode)
+GridPoint out_of_danger(const GridPoint &now, int mode = 1)
 {
     GridPoint safePoint(0, 0, -1, -1);
     if (mode == 1)
@@ -83,18 +83,20 @@ GridPoint out_of_danger(const GridPoint &now, int mode)
             it++;
         }
         if (it == Path.rend())
-            	if (timepiece % 20)
-            	{
-                	ROS_INFO("无人机受困，正在进行第%d次尝试", timepiece);
-                	timepiece++;
-            	}else{
-                	ROS_ERROR("20次尝试无果，无人机迫降");
-                	ERROR_DET = true;
-            	}	    
+            if (timepiece % 20)
+            {
+                ROS_INFO("无人机受困，正在进行第%d次尝试", timepiece);
+                timepiece++;
+            }
+            else
+            {
+                ROS_ERROR("20次尝试无果，无人机迫降");
+                ERROR_DET = true;
+            }
         else
             timepiece = 1;
         GridPoint center = *it;
-        safePoint = M.safe_Gpoint(center, center, EXPAND_ONE, true); // 因为设计问题，第二个参数在fusion==true时无效
+        safePoint = M.safe_Gpoint(center, center, EXPAND_TWO, true); // 因为设计问题，第二个参数在fusion==true时无效
     }
     else if (mode == 2)
     {
@@ -123,8 +125,11 @@ bool collision_avoidance_mission(float target_x, float target_y, float target_z,
     GridPoint end = M.PointToGridPoint({target_x, target_y});
     GridPoint next = start;
     Point Pnext;
-    // 是否处在障碍物扩张区
-    bool danger = M.Grid[start.x][start.y] == 1 ? true : false;
+    // 加一个danger的判断条件，如果离真实障碍物过于近也判断为danger
+    float min_obs = min_obs_fuc();
+
+    // 是否处在障碍物扩张区 or 离障碍物过近
+    bool danger = (M.Grid[start.x][start.y] == 1 || min_obs < 0.34f) ? true : false;
 
     // 如果danger，则前往最近且离终点最近的next点，几乎不可能出现的极端情况下前往附近的0点，否则正常更新
     if (danger)
@@ -137,7 +142,7 @@ bool collision_avoidance_mission(float target_x, float target_y, float target_z,
     {
         // 如果在终点附近直接前往
         float dis = M.Euclidean(start, end);
-        if (dis <= 3)
+        if (dis <= 5)
         {
             Pnext = {target_x, target_y};
             ROS_INFO("直接前往终点");

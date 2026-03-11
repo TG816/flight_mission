@@ -298,5 +298,6 @@ bool isobs(double x, double y, double total);
 bool is_exist_ring(ring &tr, std::vector<float> p);
 void init_location(double &init_x, double &init_y, double &init_z, double &init_yaw);
 geometry_msgs::Point change_to_world(float u, float v);
+float min_obs_fuc();
 
 #endif

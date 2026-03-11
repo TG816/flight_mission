@@ -6,9 +6,9 @@
 #include "mission_header.h"
 
 #define DELAY 2.0
-#define LEFT 90
-#define RIGHT -90
-#define BACK -179
+#define LEFT 0  //90
+#define RIGHT 0//-90
+#define BACK 0//-179
 // 全局变量定义
 int mission_num = 0;
 float if_debug = 0;
@@ -32,7 +32,10 @@ void Delay(float delay_time)
     if (delay)
     {
         ros::Duration delta_time = ros::Time::now() - last_request;
+	if(delta_time.toSec() > 0)
         ROS_WARN("延时%.2f s", delta_time.toSec());
+        else
+        last_request = ros::Time::now();
         if (ros::Time::now() - last_request >= ros::Duration(delay_time))
         {
             ROS_INFO("延时结束");
@@ -90,11 +93,11 @@ int main(int argc, char **argv)
     print_param();
 
     std::string cascade_path = "/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml";
-if (!face_cascade.load(cascade_path)) {
-    ROS_ERROR("无法加载人脸检测器分类器文件：%s", cascade_path.c_str());
-    return -1;
-}
-else{ROS_INFO("成功加载人脸检测器分类器文件");}
+    if (!face_cascade.load(cascade_path)) {
+        ROS_ERROR("无法加载人脸检测器分类器文件：%s", cascade_path.c_str());
+        return -1;
+    }
+    else{ROS_INFO("成功加载人脸检测器分类器文件");}
 
     int choice = 0;
     std::cout << "1 to go on , else to quit" << std::endl;
@@ -189,61 +192,106 @@ else{ROS_INFO("成功加载人脸检测器分类器文件");}
         ROS_WARN("mission_num = %d", mission_num);
         switch (mission_num)
         {
-        // mission1: 起飞
         case 1:
             if (mission_pos_cruise(0, 0, ALTITUDE, 0, err_max))
             {
                 Delay(DELAY);
-
             }
             break;
-       //圆环在无人机右前方的话
         case 2:
-            if (mission_pos_cruise(0, 0, ALTITUDE, -45, err_max))
+            if (mission_pos_cruise(0, 0, ALTITUDE, 0, err_max))
             {
-                Delay(DELAY);
+                Delay(0.5);
             }
             break;
         case 3:
-            if (cross_ring(3,-3, ALTITUDE,-45, err_max))
+            if (collision_avoidance_mission(3.7,0, ALTITUDE,0, err_max))
             { 
                 Delay(DELAY);
             }
             break;
         
         case 4:
-             if (mission_pos_cruise(3.5, -3.5, ALTITUDE, LEFT, err_max))
-            {   detect_face(current_frame);
-                Delay(DELAY);
+             if (mission_pos_cruise(3.7, 0, ALTITUDE, RIGHT, err_max))
+            {   
+                Delay(0.5);
             }
             break;
         
         case 5:
-            if(face_detected){
-                 ROS_INFO("检测到人脸，中心世界坐标：x:%f,y:%f",face_world.x,face_world.y);
-                mission_num=6;
-            }
-            else{
-                cruise_finding(3,-3,ALTITUDE,LEFT,err_max,0.6);
-                if(face_detected){
-                     ROS_INFO("检测到人脸，中心世界坐标：x:%f,y:%f",face_world.x,face_world.y);
-                    mission_num=6; 
-                }
-                else{ ROS_WARN("NOT DETECTED FACE !");mission_num=7;}
-                
-            }
-        case 6:
-            if (mission_pos_cruise(face_world.x,face_world.y, ALTITUDE,LEFT, err_max))
-            {
+            if (collision_avoidance_mission(3.7 , -5.0 , ALTITUDE,RIGHT, err_max))
+            { 
                 Delay(DELAY);
+            }
+            break;
+        case 6:
+            if (mission_pos_cruise(3.7 , -5.0 , ALTITUDE,BACK, err_max))
+            {
+                Delay(0.5);
             }
             break;
   
         case 7:
+            if (collision_avoidance_mission(0.7 , -5.0 , ALTITUDE,BACK, err_max))
+            { 
+                Delay(DELAY);
+            }
+            break;
+        
+        case 8:
+            if (mission_pos_cruise(0.7 , -5.0 , ALTITUDE,RIGHT, err_max))
+            { 
+                Delay(0.5);
+            }
+            break;
+
+        case 9:
+            if (collision_avoidance_mission(0 , 0 , ALTITUDE,RIGHT, err_max))
+            { 
+                Delay(DELAY);
+                mission_num = 15;
+            }
+            break;
+
+        // case 10:
+        //     if (mission_pos_cruise(0.3 , -6.3 , ALTITUDE,0, err_max))
+        //     { 
+        //         Delay(DELAY);
+        //     }
+        //     break;
+
+        // case 11:
+        //     if (collision_avoidance_mission(3.5 , -6.3 , ALTITUDE,0, err_max))
+        //     { 
+        //         Delay(DELAY);
+        //     }
+        //     break;
+
+        // case 12:
+        //     if (mission_pos_cruise(3.5 , -6.3 , ALTITUDE, 0, err_max))
+        //     { 
+        //         Delay(DELAY);
+        //     }
+        //     break;
+
+        // case 13:
+        //     if (collision_avoidance_mission(0 , 0 , ALTITUDE,0, err_max))
+        //     { 
+        //         Delay(DELAY);
+        //     }
+        //     break;
+
+        // case 14:
+        //     if (mission_pos_cruise(0 , 0 , ALTITUDE,0, err_max))
+        //     { 
+        //         Delay(DELAY);
+        //     }
+        //     break;
+
+        case 15:
             if (precision_land())
-            {
-                mission_num = -1; // 任务结束
-                last_request = ros::Time::now();
+            { 
+                mission_num = -1;
             }
             break;
         }
