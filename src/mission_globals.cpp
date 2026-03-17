@@ -45,20 +45,13 @@ float map_length = 11.0f;
 // 视觉相关
 cv::Mat current_frame;
 bool got_image = false;
-std::string target_color;
-geometry_msgs::Point cr_world;
-cv::Point2f color_center;
-bool color_detected = false;
-std::string detected_color = "";
-double balance_y = -6.0;
 cv::Mat camera_matrix = (cv::Mat_<double>(3, 3) << 1520.0, 0.0, 960.0,
                          0.0, 1520.0, 540.0,
                          0.0, 0.0, 1.0);
-cv::CascadeClassifier face_cascade;
-bool face_detected = false;
-cv::Rect face_rect;
-geometry_msgs::Point face_world;
-float cruise_v = 0.5;
+const float MIN_CIRCLE_RATIO = 0.7f;
+const float MAX_CIRCLE_RATIO = 0.95f;
+const float INNER_CIRCLE_RATIO = 2.0f/3.0f;
+const float CENTER_IMG_RATIO = 0.7f;
 
 // 通用工具相关
 int timepiece = 1;
@@ -72,13 +65,29 @@ ring z_ring(0.25, 0.1, 0.85, 0.20);
 Obstacle Obs;
 Map M(map_width, map_length, map_cellsize);
 std::vector<GridPoint> Path;
+Config cfg({"",0.5f,true}); //缺onnx路径
 
-// 颜色范围定义
-std::vector<ColorRange> color_ranges = {
-    ColorRange(cv::Scalar(0, 70, 50), cv::Scalar(10, 255, 255), "red"),
-    ColorRange(cv::Scalar(170, 70, 50), cv::Scalar(180, 255, 255), "red"),
-    ColorRange(cv::Scalar(40, 70, 50), cv::Scalar(80, 255, 255), "green"),
-    ColorRange(cv::Scalar(100, 70, 50), cv::Scalar(130, 255, 255), "blue")};
+//检查类别定义
+// CIFAR100 类别列表（与Python版本一致）
+const std::vector<std::string> CIFAR100_CLASSES = {
+    "apple", "aquarium_fish", "baby", "bear", "beaver", "bed", "bee", "beetle", 
+    "bicycle", "bottle", "bowl", "boy", "bridge", "bus", "butterfly", "camel", 
+    "can", "castle", "caterpillar", "cattle", "chair", "chimpanzee", "clock", 
+    "cloud", "cockroach", "couch", "crab", "crocodile", "cup", "dinosaur", 
+    "dolphin", "elephant", "flatfish", "forest", "fox", "girl", "hamster", 
+    "house", "kangaroo", "keyboard", "lamp", "lawn_mower", "leopard", "lion",
+    "lizard", "lobster", "man", "maple_tree", "motorcycle", "mountain", "mouse", 
+    "mushroom", "oak_tree", "orange", "orchid", "otter", "palm_tree", "pear",
+    "pickup_truck", "pine_tree", "plain", "plate", "poppy", "porcupine",
+    "possum", "rabbit", "raccoon", "ray", "road", "rocket", "rose",
+    "sea", "seal", "shark", "shrew", "skunk", "skyscraper", "snail", "snake",
+    "spider", "squirrel", "streetcar", "sunflower", "sweet_pepper", "table",
+    "tank", "telephone", "television", "tiger", "tractor", "train", "trout",
+    "tulip", "turtle", "wardrobe", "whale", "willow_tree", "wolf", "woman", "worm"
+};
+
+// ========== 全局变量：存储二维码解析后的目标类别 ==========
+std::vector<std::string> g_qrcode_classes;
 
 // 扩张用数组
 int dx[EXPAND_TWO] = {1, 1, 0, -1, -1, -1, 0, 1, 2, 0, -2, 0, 2, 2, 1, -1, -2, -2, -2, -2, -1, 1, 2, 2};

@@ -42,7 +42,7 @@ void find_obstacal()
                 counting = 0;
                 if (end - start >= 3)
                 {
-                    Obs.all_obs.push_back({(double)start, (double)end});
+                    Obs.all_obs.push_back({start, end});
                     // ROS_INFO("添加障碍物(%f,%f)", start, end);
                 }
             }
@@ -64,7 +64,7 @@ void find_obstacal()
         end = 359; // 尾部区间的结束角是最后一个角度
         if (end - start >= 3)
         {
-            Obs.all_obs.push_back({(double)start, (double)end});
+            Obs.all_obs.push_back({start, end});
             // ROS_INFO("添加障碍物(%f,%f)", start, end);
         }
     }

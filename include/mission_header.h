@@ -8,6 +8,7 @@
 #include <climits>
 #include <cstring>
 #include <cstdlib>
+#include <numeric>
 #include <algorithm>
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -33,6 +34,7 @@
 #include <opencv2/objdetect.hpp>
 #include <opencv2/opencv.hpp>
 #include <sensor_msgs/Image.h>
+#include <onnxruntime_cxx_api.h> //yolo新加
 // 动态参数
 // 回退逻辑
 
@@ -99,18 +101,13 @@ extern float weight[EXPAND_ONE];
 // 视觉相关
 extern cv::Mat current_frame;
 extern bool got_image;
-extern std::string target_color;
-extern geometry_msgs::Point cr_world;
-extern cv::Point2f color_center;
-extern bool color_detected;
-extern std::string detected_color;
-extern double balance_y;
 extern cv::Mat camera_matrix;
-extern cv::CascadeClassifier face_cascade;
-extern bool face_detected;
-extern cv::Rect face_rect;
-extern geometry_msgs::Point face_world;
-extern float cruise_v;
+extern const float MIN_CIRCLE_RATIO = 0.7f;
+extern const float MAX_CIRCLE_RATIO = 0.95f;
+extern const float INNER_CIRCLE_RATIO = 2.0f/3.0f;
+extern const float CENTER_IMG_RATIO = 0.7f;
+extern std::vector<std::string> g_qrcode_classes;
+extern const std::vector<std::string> CIFAR100_CLASSES;
 
 // 通用工具相关
 extern int timepiece;
@@ -121,18 +118,18 @@ extern double init_x, init_y, init_z, init_yaw;
 /************************************************************************
 结构体定义
 *************************************************************************/
-typedef struct Angle
+struct Angle
 {
-    double start, end;
-    Angle(double _start, double _end) : start(_start), end(_end) {}
-} Angle;
+    int start, end;
+    Angle(int _start, int _end) : start(_start), end(_end) {}
+} ;
 
-typedef struct AddPos
+struct AddPos
 {
     double x = 0, y = 0, d;
     Angle R;
-    AddPos(double _start, double _end, double _x, double _y, double _d) : R(_start, _end), x(_x), y(_y), d(_d) {}
-} AddPos;
+    AddPos(int _start, int _end, double _x, double _y, double _d) : R(_start, _end), x(_x), y(_y), d(_d) {}
+} ;
 
 struct Point
 {
@@ -189,16 +186,30 @@ public:
     }
 };
 
-// 颜色范围定义（HSV）
-struct ColorRange
-{
-    cv::Scalar lower;
-    cv::Scalar upper;
-    std::string name;
-    ColorRange(cv::Scalar l, cv::Scalar u, std::string n) : lower(l), upper(u), name(n) {}
+
+// 配置参数结构体
+struct Config {
+    std::string model_path;
+    float conf_threshold = 0.5f;
+    bool use_gpu = false;
 };
 
-extern std::vector<ColorRange> color_ranges;
+extern Config cfg;
+
+struct RoughTargetInfo {  // 粗识别结果（正方形+圆形合一）
+    cv::Rect outer_square;  // 外层正方形
+    float cx = 0, cy = 0, radius = 0;  // 外层圆核心参数
+    bool is_valid = false;  // 是否检测到有效目标
+};
+
+struct RecognizeResult {
+    bool success = false;
+    std::string cls_name;
+    float conf = 0;
+    RoughTargetInfo rough_info;
+    cv::Rect center_img;
+    float x = 0, y = 0;  // 图片中心位置
+};
 
 /************************************************************************
 类定义
@@ -282,10 +293,10 @@ struct CompareF
 /************************************************************************
 通用工具函数声明
 *************************************************************************/
-double call_len(std::vector<float> p, double angle1, double angle2);     // angle1为start，angle2为end
-double call_mid_len(std::vector<float> p, double angle1, double angle2); // angle1为start，angle2为end
-double cal_y(std::vector<float> p, double angle);
-double cal_x(std::vector<float> p, double angle);
+double call_len(std::vector<float> p, int angle1, int angle2);     // angle1为start，angle2为end
+double call_mid_len(std::vector<float> p, int angle1, int angle2); // angle1为start，angle2为end
+double cal_y(std::vector<float> p, int angle);
+double cal_x(std::vector<float> p, int angle);
 void satfunc(float *data, float Max);
 Point rotation_yaw(float yaw_angle, const Point &p);
 void rotation(float yaw_angle, double &x, double &y);

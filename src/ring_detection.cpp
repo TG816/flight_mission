@@ -7,7 +7,8 @@
 *************************************************************************/
 void stick::FindStick(std::vector<float> p)
 {
-    double start = 0, end = 0, len = 0;
+    int start = 0, end = 0;
+    double len = 0;
     int counting = 0;
     for (int i = 1; i < 180; i++)
     {

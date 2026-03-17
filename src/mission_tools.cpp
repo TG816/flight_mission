@@ -4,32 +4,32 @@
 /************************************************************************
 通用工具函数实现
 *************************************************************************/
-double call_len(std::vector<float> p, double angle1, double angle2) // angle1为start，angle2为end
+double call_len(std::vector<float> p, int angle1, int angle2) // angle1为start，angle2为end
 {
     // 利用余弦定理
-    double edge1 = p[(int)angle1];
-    double edge2 = p[(int)angle2];
-    double dif_angle = angle2 - angle1;
-    return sqrt(edge1 * edge1 + edge2 * edge2 - 2 * edge1 * edge2 * cos(dif_angle / 180 * 3.1415926));
+    double edge1 = p[angle1];
+    double edge2 = p[angle2];
+    int dif_angle = angle2 - angle1;
+    return sqrt(edge1 * edge1 + edge2 * edge2 - 2 * edge1 * edge2 * cos((float)dif_angle / 180 * 3.1415926));
 }
 
-double call_mid_len(std::vector<float> p, double angle1, double angle2) // angle1为start，angle2为end
+double call_mid_len(std::vector<float> p, int angle1, int angle2) // angle1为start，angle2为end
 {
     // 利用余弦定理
-    double edge1 = p[(int)angle1];
-    double edge2 = p[(int)angle2];
-    double dif_angle = angle2 - angle1;
-    return sqrt(edge1 * edge1 + edge2 * edge2 + 2 * edge1 * edge2 * cos(dif_angle / 180 * 3.1415926)) / 2; // 注意此处变为加号,计算的是已知角度的补角
+    double edge1 = p[angle1];
+    double edge2 = p[angle2];
+    int dif_angle = angle2 - angle1;
+    return sqrt(edge1 * edge1 + edge2 * edge2 + 2 * edge1 * edge2 * cos((float)dif_angle / 180 * 3.1415926)) / 2; // 注意此处变为加号,计算的是已知角度的补角
 }
 
-double cal_y(std::vector<float> p, double angle)
+double cal_y(std::vector<float> p, int angle)
 {
-    return -cos(angle / 180 * 3.1415926) * p[(int)angle];
+    return -cos((float)angle / 180 * 3.1415926) * p[angle];
 }
 
-double cal_x(std::vector<float> p, double angle)
+double cal_x(std::vector<float> p, int angle)
 {
-    return sin(angle / 180 * 3.1415926) * p[(int)angle];
+    return sin((float)angle / 180 * 3.1415926) * p[angle];
 }
 
 /************************************************************************

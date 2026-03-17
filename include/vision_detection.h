@@ -6,11 +6,11 @@
 /************************************************************************
 视觉相关函数声明
 *************************************************************************/
-void getColor(const cv::Mat &frame);
-bool detectColorFloor(const cv::Mat &frame, cv::Point2f &center, std::string &color_name);
-void detect_face(const cv::Mat& frame);
-void cruise_finding(float center_x, float center_y, float z, float target_yaw, float error_max, float a);
-bool FindColorToMove();
-string detectBeginColor();
+RecognizeResult recognizeTarget(const cv::Mat& frame, const Config& cfg);
+RoughTargetInfo roughDetectTarget(const cv::Mat& frame);
+cv::Rect getCenterImageRect(const RoughTargetInfo& rough_info);
+bool preciseClassify(const cv::Mat& frame, const cv::Rect& center_rect, const Config& cfg,
+                     std::string& cls_name, float& conf);
+bool detectQRCodeAndExtractInfo(const cv::Mat& frame);
 
 #endif
