@@ -43,7 +43,8 @@ using namespace std;
 /************************************************************************
 全局常量定义
 *************************************************************************/
-#define ALTITUDE 0.8f
+#define ALTITUDE 1.25f
+#define LOW_ALTITUDE 0.5f //待定
 #define OBSTACLE_WIDTH 0.3
 #define EPS 1e-3
 #define EXPAND_ONE 8

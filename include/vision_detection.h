@@ -11,6 +11,6 @@ RoughTargetInfo roughDetectTarget(const cv::Mat& frame);
 cv::Rect getCenterImageRect(const RoughTargetInfo& rough_info);
 bool preciseClassify(const cv::Mat& frame, const cv::Rect& center_rect, const Config& cfg,
                      std::string& cls_name, float& conf);
-bool detectQRCodeAndExtractInfo(const cv::Mat& frame);
+bool detectQRCodeAndExtractInfo();
 
 #endif

@@ -192,10 +192,11 @@ bool preciseClassify(const cv::Mat& frame, const cv::Rect& center_rect, const Co
  * @return bool 是否成功识别二维码
  * @note 二维码内容格式：英文逗号分隔的类别列表（如 "apple,man,tree"）
  */
-bool detectQRCodeAndExtractInfo(const cv::Mat& frame) {
+bool detectQRCodeAndExtractInfo() {
+    cv::Mat &frame = current_frame;
     // 1. 初始化二维码检测器（静态创建，提升效率）
     static cv::QRCodeDetector qr_detector;
-    
+
     // 2. 检测并解码二维码（格式确定，无需校验图像为空）
     std::string qr_text = qr_detector.detectAndDecode(frame);
     if (qr_text.empty()) return false;
@@ -207,6 +208,25 @@ bool detectQRCodeAndExtractInfo(const cv::Mat& frame) {
     while (std::getline(iss, class_name, ',')) {
         g_qrcode_classes.push_back(class_name);
     }
+   
+    /*
+    此处缺少left right 信息的提取
+    */
 
+    ROS_INFO("成功解析二维码 | 原始文本：%s | 解析出%d个元素",
+             qr_text.c_str(), (int)g_qrcode_classes.size());
+
+    // 第二步：逐条输出每个元素（带索引，便于定位）
+    if (g_qrcode_classes.empty())
+    {
+        ROS_INFO("解析结果为空（无有效元素）");
+    }
+    else
+    {
+        for (size_t i = 0; i < g_qrcode_classes.size(); ++i)
+        {
+            ROS_INFO("第%d个元素：%s", (int)(i + 1), g_qrcode_classes[i].c_str());
+        }
+    }
     return true;
 }

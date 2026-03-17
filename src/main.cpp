@@ -5,10 +5,10 @@
 #include "mission_callbacks.h"
 #include "mission_header.h"
 
-#define DELAY 2.0
-#define LEFT 0  //90
-#define RIGHT 0//-90
-#define BACK 0//-179
+#define DELAY 1.0
+#define LEFT 90
+#define RIGHT -90
+#define BACK -179
 // 全局变量定义
 int mission_num = 0;
 float if_debug = 0;
@@ -32,10 +32,10 @@ void Delay(float delay_time)
     if (delay)
     {
         ros::Duration delta_time = ros::Time::now() - last_request;
-	if(delta_time.toSec() > 0)
-        ROS_WARN("延时%.2f s", delta_time.toSec());
+        if (delta_time.toSec() > 0)
+            ROS_WARN("延时%.2f s", delta_time.toSec());
         else
-        last_request = ros::Time::now();
+            last_request = ros::Time::now();
         if (ros::Time::now() - last_request >= ros::Duration(delay_time))
         {
             ROS_INFO("延时结束");
@@ -78,7 +78,7 @@ int main(int argc, char **argv)
 
     // 参数读取
 
-    nh.param<float>("err_max", err_max, 0);
+    nh.param<float>("err_max", err_max, 0.2);
     nh.param<float>("if_debug", if_debug, 0);
     nh.param<double>("zero_plane_height", zero_plane_height, 0);
     nh.param<double>("height_threshold", height_threshold, 0.05);
@@ -92,12 +92,16 @@ int main(int argc, char **argv)
     nh.param<float>("map_length", map_length, 10.0);
     print_param();
 
-    std::string cascade_path = "/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml";
-    if (!face_cascade.load(cascade_path)) {
-        ROS_ERROR("无法加载人脸检测器分类器文件：%s", cascade_path.c_str());
-        return -1;
-    }
-    else{ROS_INFO("成功加载人脸检测器分类器文件");}
+    // std::string cascade_path = "/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml";
+    // if (!face_cascade.load(cascade_path))
+    // {
+    //     ROS_ERROR("无法加载人脸检测器分类器文件：%s", cascade_path.c_str());
+    //     return -1;
+    // }
+    // else
+    // {
+    //     ROS_INFO("成功加载人脸检测器分类器文件");
+    // }
 
     int choice = 0;
     std::cout << "1 to go on , else to quit" << std::endl;
@@ -192,105 +196,251 @@ int main(int argc, char **argv)
         ROS_WARN("mission_num = %d", mission_num);
         switch (mission_num)
         {
-        case 1:
+        case 1:  //起飞
             if (mission_pos_cruise(0, 0, ALTITUDE, 0, err_max))
             {
                 Delay(DELAY);
             }
             break;
-        case 2:
-            if (mission_pos_cruise(0, 0, ALTITUDE, 0, err_max))
+        case 2: //前进1米8 (1个我的距离)
+            if (mission_pos_cruise(1.8, 0, LOW_ALTITUDE, 0, err_max))
             {
                 Delay(0.5);
             }
             break;
-        case 3:
-            if (collision_avoidance_mission(3.7,0, ALTITUDE,0, err_max))
-            { 
-                Delay(DELAY);
+        case 3: //扫码
+            if (detectQRCodeAndExtractInfo())
+            {
+                mission_num = 4; // 理论上完全可以Delay(0);
             }
             break;
-        
-        case 4:
-             if (mission_pos_cruise(3.7, 0, ALTITUDE, RIGHT, err_max))
-            {   
+        case 4: //准备转圈
+            if (mission_pos_cruise(3.7, 0.6, ALTITUDE, 0, err_max))
+            {
                 Delay(0.5);
             }
             break;
-        
+
         case 5:
-            if (collision_avoidance_mission(3.7 , -5.0 , ALTITUDE,RIGHT, err_max))
-            { 
-                Delay(DELAY);
-            }
-            break;
-        case 6:
-            if (mission_pos_cruise(3.7 , -5.0 , ALTITUDE,BACK, err_max))
+            if (Circle_around(COUNTS,TIMES))
             {
-                Delay(0.5);
+                Delay(DELAY);
             }
             break;
-  
+
+            // 转圈巡航函数：counts=转圈数，times=单圈最大耗时（秒）
+            /*
+            不知道写哪就补这了
+            来个帅哥改一下
+            bool Circle_around(int counts, float times)
+            {
+                int now_counts = 0;                        // 已完成转圈数
+                int mission = 1;                           // 当前巡航阶段（1-4为四个点，5为完成1圈）
+                ros::Time last_request = ros::Time::now(); // 单圈计时起点（小写更符合C++命名规范）
+                // 总循环：未完成指定圈数 + 总耗时未超限（总耗时=counts*times）
+                while (now_counts < counts && ros::ok())
+                {
+                    // 1. 通用日志：单圈耗时 + 转圈进度（抽离到switch外，减少冗余）
+                    ros::Duration d_time = ros::Time::now() - last_request;
+                    ROS_INFO("当前单圈耗时: %.2f s, 已转%d圈, 正在转第%d圈",
+                             d_time.toSec(), now_counts, now_counts + 1);
+                    // 2. 单圈超时判断：当前圈耗时超过times则终止（避免卡壳）
+                    if (d_time.toSec() > times)
+                    {
+                        ROS_WARN("第%d圈巡航超时（最大耗时%.2f s），终止转圈任务", now_counts + 1, times);
+                        return true;
+                    }
+                    // 3. 分阶段巡航（四个点完成1圈）
+                    switch (mission)
+                    {
+                    case 1: // 第一点：(4.9, -0.6)
+                        if (mission_pos_cruise(4.9, 0.6, ALTITUDE, 0, err_max))
+                        {
+                            mission = 2;
+                            ROS_INFO("完成第%d圈第1个巡航点 (4.9, 0.6)", now_counts + 1);
+                        }
+                        break;
+
+                    case 2: // 第二点：(4.9, -0.6)
+                        if (mission_pos_cruise(4.9, -0.6, ALTITUDE, 0, err_max))
+                        {
+                            mission = 3;
+                            ROS_INFO("完成第%d圈第2个巡航点 (4.9, -0.6)", now_counts + 1);
+                        }
+                        break;
+
+                    case 3: // 第三点：(3.7, -0.6)
+                        if (mission_pos_cruise(3.7, -0.6, ALTITUDE, 0, err_max))
+                        {
+                            mission = 4;
+                            ROS_INFO("完成第%d圈第3个巡航点 (3.7, -0.6)", now_counts + 1);
+                        }
+                        break;
+
+                    case 4: // 第四点：(3.7, 0.6)
+                        if (mission_pos_cruise(3.7, 0.6, ALTITUDE, 0, err_max))
+                        {
+                            mission = 5;
+                            ROS_INFO("完成第%d圈第4个巡航点 (3.7, 0.6)", now_counts + 1);
+                        }
+                        break;
+                    case 5:                              // 完成1圈，重置状态
+                        now_counts++;                    // 已完成圈数+1
+                        mission = 1;                     // 回到第一点开始下一圈
+                        last_request = ros::Time::now(); // 重置单圈计时起点
+                        ROS_INFO("✅ 完成第%d圈，累计完成%d圈（目标%d圈）",
+                                 now_counts, now_counts, counts);
+                        break;
+                    }
+                    ros::spinOnce();
+                }
+
+                // 任务结束：打印最终状态
+                if (now_counts >= counts)
+                {
+                    ROS_INFO("🎉 转圈任务完成：共完成%d圈（目标%d圈）", now_counts, counts);
+                }
+                else
+                {
+                    ROS_WARN("❌ 转圈任务超时：仅完成%d圈（目标%d圈），总耗时超限", now_counts, counts);
+                }
+                return true;
+            }
+
+            */
+        case 6:
+            if (mission_pos_cruise(3.6, 1.6, ALTITUDE, 0, err_max))
+            {
+                Delay(0.2);
+            }
+            break;
         case 7:
-            if (collision_avoidance_mission(0.7 , -5.0 , ALTITUDE,BACK, err_max))
-            { 
-                Delay(DELAY);
+            if (onFrame())
+            {
+                Delay(0.2);
             }
             break;
-        
         case 8:
-            if (mission_pos_cruise(0.7 , -5.0 , ALTITUDE,RIGHT, err_max))
-            { 
-                Delay(0.5);
+            if (mission_pos_cruise(1.8, 1.6, ALTITUDE, 0, err_max))
+            {
+                Delay(0.2);
             }
             break;
-
         case 9:
-            if (collision_avoidance_mission(0 , 0 , ALTITUDE,RIGHT, err_max))
-            { 
-                Delay(DELAY);
-                mission_num = 15;
+            if (onFrame())
+            {
+                Delay(0.2);
             }
             break;
-
-        // case 10:
-        //     if (mission_pos_cruise(0.3 , -6.3 , ALTITUDE,0, err_max))
-        //     { 
-        //         Delay(DELAY);
-        //     }
-        //     break;
-
-        // case 11:
-        //     if (collision_avoidance_mission(3.5 , -6.3 , ALTITUDE,0, err_max))
-        //     { 
-        //         Delay(DELAY);
-        //     }
-        //     break;
-
-        // case 12:
-        //     if (mission_pos_cruise(3.5 , -6.3 , ALTITUDE, 0, err_max))
-        //     { 
-        //         Delay(DELAY);
-        //     }
-        //     break;
-
-        // case 13:
-        //     if (collision_avoidance_mission(0 , 0 , ALTITUDE,0, err_max))
-        //     { 
-        //         Delay(DELAY);
-        //     }
-        //     break;
-
-        // case 14:
-        //     if (mission_pos_cruise(0 , 0 , ALTITUDE,0, err_max))
-        //     { 
-        //         Delay(DELAY);
-        //     }
-        //     break;
+        case 10:
+            if (mission_pos_cruise(1.8, -1.6, ALTITUDE, 0, err_max))
+            {
+                Delay(0.2);
+            }
+            break;
+        case 11:
+            if (onFrame())
+            {
+                Delay(0.2);
+            }
+            break;
+        case 12:
+            if (mission_pos_cruise(3.6, -1.6, ALTITUDE, 0, err_max))
+            {
+                Delay(0.2);
+            }
+            break;
+        case 13:
+            if (onFrame())
+            {
+                Delay(0.2);
+            }
+            break;
+        case 14:
+            if (mission_pos_cruise(6.0, -4.0, ALTITUDE, 0, err_max))
+            {
+                Delay(DELAY);
+            }
+            break;
 
         case 15:
+            if (mission_pos_cruise(6.0,-4.0, ALTITUDE, LEFT, err_max))
+            {
+                Delay(0.2);
+            }
+            break;
+        case 16:
+            if (cross_ring(6.0, 0.0, ALTITUDE, LEFT, err_max))
+            {
+                Delay(0.2);
+            }
+            break;
+        case 17:
+            if (mission_pos_cruise(6.0, 2.0, ALTITUDE, LEFT, err_max))
+            {
+                Delay(DELAY);
+            }
+            break;
+        case 18:
+            if (/*特殊靶识别并投标函数*/)
+            {
+                Delay(DELAY);
+            }
+            break;
+        case 19:
+            if (mission_pos_cruise(3.5, 2.0, ALTITUDE, LEFT, err_max))
+            {
+                Delay(DELAY);
+            }
+            break;
+        case 20:
+            if (mission_pos_cruise(0, H_y, ALTITUDE, LEFT, err_max))
+            {
+                Delay(0.2);
+            }
+            break;
+        case 21:
+            if (mission_pos_cruise(0, H_y, ALTITUDE, 0, err_max))
+            {
+                Delay(DELAY);
+            }
+            break;
+            /*
+                int H_direction = 0; /0就是没有，1就是left，-1就是right
+                float H_y = 1.6 * H_direction;
+            */
+
+            // case 11:
+            //     if (collision_avoidance_mission(3.5 , -6.3 , ALTITUDE,0, err_max))
+            //     {
+            //         Delay(DELAY);
+            //     }
+            //     break;
+
+            // case 12:
+            //     if (mission_pos_cruise(3.5 , -6.3 , ALTITUDE, 0, err_max))
+            //     {
+            //         Delay(DELAY);
+            //     }
+            //     break;
+
+            // case 13:
+            //     if (collision_avoidance_mission(0 , 0 , ALTITUDE,0, err_max))
+            //     {
+            //         Delay(DELAY);
+            //     }
+            //     break;
+
+            // case 14:
+            //     if (mission_pos_cruise(0 , 0 , ALTITUDE,0, err_max))
+            //     {
+            //         Delay(DELAY);
+            //     }
+            //     break;
+
+        case 22:
             if (precision_land())
-            { 
+            {
                 mission_num = -1;
             }
             break;
@@ -306,4 +456,3 @@ int main(int argc, char **argv)
     }
     return 0;
 }
-
