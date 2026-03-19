@@ -4,10 +4,12 @@
 #include <string>
 #include <vector>
 #include <queue>
+#include <quirc.h>
 #include <cmath>
 #include <climits>
 #include <cstring>
 #include <cstdlib>
+#include <numeric>
 #include <algorithm>
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -33,6 +35,10 @@
 #include <opencv2/objdetect.hpp>
 #include <opencv2/opencv.hpp>
 #include <sensor_msgs/Image.h>
+#include <opencv2/imgproc/imgproc_c.h>
+#include <onnxruntime_cxx_api.h> //yolo新加
+#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 // 动态参数
 // 回退逻辑
 
@@ -41,7 +47,10 @@ using namespace std;
 /************************************************************************
 全局常量定义
 *************************************************************************/
-#define ALTITUDE 0.8f
+#define ALTITUDE 2.0f
+#define LOW_ALTITUDE 0.5f //待定
+#define COUNTS 1  // 需要无人机转的圈数                        //待定，目标是超过70圈
+#define TIMES 420  //转圈的最大时长，一旦超时剩多少圈都不转了    //7分钟？
 #define OBSTACLE_WIDTH 0.3
 #define EPS 1e-3
 #define EXPAND_ONE 8
@@ -99,18 +108,28 @@ extern float weight[EXPAND_ONE];
 // 视觉相关
 extern cv::Mat current_frame;
 extern bool got_image;
-extern std::string target_color;
-extern geometry_msgs::Point cr_world;
-extern cv::Point2f color_center;
-extern bool color_detected;
-extern std::string detected_color;
-extern double balance_y;
 extern cv::Mat camera_matrix;
-extern cv::CascadeClassifier face_cascade;
-extern bool face_detected;
-extern cv::Rect face_rect;
-extern geometry_msgs::Point face_world;
-extern float cruise_v;
+extern int H_direction; 
+extern std::vector<std::string> g_qrcode_classes;
+extern const std::vector<std::string> CIFAR100_CLASSES;
+
+// 注意：extern 仅做声明，具体定义需在某个 .cpp 文件中实现（无 extern 关键字）
+extern const float CONF_THRESHOLD;
+extern const float SEARCH_RADIUS_SCALE;  // 灰环中心搜索黑正方形的范围（直径2倍）
+extern const float INNER_IMG_SCALE;      // 中心图片占白色圆比例
+extern const float APPROX_EPSILON;      // 轮廓逼近阈值（宽松，适配透视）
+extern const std::string ONNX_MODEL_PATH; // 需替换为实际模型路径
+extern const bool USE_GPU;              // 是否使用GPU推理
+
+// 颜色范围（HSV，适配无人机下视光照）
+extern const cv::Scalar GRAY_LOW;
+extern const cv::Scalar GRAY_HIGH;
+extern const cv::Scalar BLACK_LOW;
+extern const cv::Scalar BLACK_HIGH;
+extern const cv::Scalar WHITE_LOW;
+extern const cv::Scalar WHITE_HIGH;
+
+extern const cv::Size MORPHO_KERNEL;  // 形态学核（轻量化）
 
 // 通用工具相关
 extern int timepiece;
@@ -121,18 +140,18 @@ extern double init_x, init_y, init_z, init_yaw;
 /************************************************************************
 结构体定义
 *************************************************************************/
-typedef struct Angle
+struct Angle
 {
-    double start, end;
-    Angle(double _start, double _end) : start(_start), end(_end) {}
-} Angle;
+    int start, end;
+    Angle(int _start, int _end) : start(_start), end(_end) {}
+} ;
 
-typedef struct AddPos
+struct AddPos
 {
     double x = 0, y = 0, d;
     Angle R;
-    AddPos(double _start, double _end, double _x, double _y, double _d) : R(_start, _end), x(_x), y(_y), d(_d) {}
-} AddPos;
+    AddPos(int _start, int _end, double _x, double _y, double _d) : R(_start, _end), x(_x), y(_y), d(_d) {}
+} ;
 
 struct Point
 {
@@ -189,16 +208,18 @@ public:
     }
 };
 
-// 颜色范围定义（HSV）
-struct ColorRange
-{
-    cv::Scalar lower;
-    cv::Scalar upper;
-    std::string name;
-    ColorRange(cv::Scalar l, cv::Scalar u, std::string n) : lower(l), upper(u), name(n) {}
-};
 
-extern std::vector<ColorRange> color_ranges;
+// -------------------------- 结构体：无人机检测结果（供飞控调用） --------------------------
+
+struct UavDetectResult {
+    bool is_detected = false;          // 是否检测到靶子
+    std::string class_name = "unknown";// 分类类别（修复：与实现对齐）
+    float confidence = 0.0f;           // 分类置信度
+    cv::Point gray_ring_center;        // 灰环中心（修复：与实现对齐）
+    cv::Rect black_square;             // 黑色正方形
+    float square_angle = 0.0f;         // 正方形偏转角度
+    cv::Rect inner_image_rect;         // 中心图片区域（修复：与实现对齐）
+};
 
 /************************************************************************
 类定义
@@ -282,10 +303,10 @@ struct CompareF
 /************************************************************************
 通用工具函数声明
 *************************************************************************/
-double call_len(std::vector<float> p, double angle1, double angle2);     // angle1为start，angle2为end
-double call_mid_len(std::vector<float> p, double angle1, double angle2); // angle1为start，angle2为end
-double cal_y(std::vector<float> p, double angle);
-double cal_x(std::vector<float> p, double angle);
+double call_len(std::vector<float> p, int angle1, int angle2);     // angle1为start，angle2为end
+double call_mid_len(std::vector<float> p, int angle1, int angle2); // angle1为start，angle2为end
+double cal_y(std::vector<float> p, int angle);
+double cal_x(std::vector<float> p, int angle);
 void satfunc(float *data, float Max);
 Point rotation_yaw(float yaw_angle, const Point &p);
 void rotation(float yaw_angle, double &x, double &y);
@@ -298,5 +319,6 @@ bool isobs(double x, double y, double total);
 bool is_exist_ring(ring &tr, std::vector<float> p);
 void init_location(double &init_x, double &init_y, double &init_z, double &init_yaw);
 geometry_msgs::Point change_to_world(float u, float v);
+float min_obs_fuc();
 
 #endif

@@ -3,7 +3,7 @@
  # 基础控制参数
 
   err_max: 0.2                # 位置误差最大阈值（米）
-  if_debug: 0                 # 0=手动offboard，1=自动offboard
+  if_debug: 1                 # 0=手动offboard，1=自动offboard
   
   # 飞行核心参数
   zero_plane_height: 0.2      # 地面零平面高度

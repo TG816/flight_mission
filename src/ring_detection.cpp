@@ -7,7 +7,8 @@
 *************************************************************************/
 void stick::FindStick(std::vector<float> p)
 {
-    double start = 0, end = 0, len = 0;
+    int start = 0, end = 0;
+    double len = 0;
     int counting = 0;
     for (int i = 1; i < 180; i++)
     {
@@ -34,7 +35,7 @@ void stick::FindStick(std::vector<float> p)
                     	 len = call_len(p, start, end);
                     	 if (len < stick_width + std_stick_err && len > stick_width - std_stick_err){
                         stick_angle.push_back(Angle(start, end));
-                        ROS_INFO("添加障碍物(%f,%f)，宽度%f", start, end, len);
+                        ROS_INFO("添加障碍物(%d,%d)，宽度%f", start, end, len);
                         }
                     }
                 }else continue;
@@ -218,51 +219,51 @@ bool cross_ring(double x, double y, double z, double t_yaw, double err_max)
             if (move_in_drone_coordinate(nearest_ring[0] - 1.2, nearest_ring[1], 0, 0, err_max, 1))            {
                 isinit = false;
                 ROS_INFO("水平位置矫正完成！");
-                mode = 4;
-            }
-            break;
-        }
-        case 4:
-        {
-            if (counts % 30 && !is_exist_ring(z_ring, distance_bins_up))
-            {
-                ROS_INFO("第%d次判断", counts);
-                counts++;
-            }
-            else
-            {
-                if (counts % 30 == 0)
-                {
-                    if (isobs(x, y, total_distance))
-                    {
-                        if (mission_pos_cruise(x, y, z, t_yaw, err_max))
-                            mode = 7;
-                    }
-                    else
-                    {
-                        ROS_INFO("非圆环！");
-                        mode = 7;
-                    }
-                }
-                else
-                {
-                    ROS_WARN("环中心位置高度:(%f)", nearest_ring[1] + local_pos.pose.pose.position.z);
-                    mode = 5;
-                }
-                counts = 1;
-            }
-            break;
-        }
-        case 5:
-        {
-            if (move_in_drone_coordinate(0, 0, -nearest_ring[1], 0, err_max))
-            {
-                isinit = false;
-                ROS_INFO("竖直位置矫正完成！");
                 mode = 6;
             }
             break;
         }
+        // case 4:
+        // {
+        //     if (counts % 30 && !is_exist_ring(z_ring, distance_bins_up))
+        //     {
+        //         ROS_INFO("第%d次判断", counts);
+        //         counts++;
+        //     }
+        //     else
+        //     {
+        //         if (counts % 30 == 0)
+        //         {
+        //             if (isobs(x, y, total_distance))
+        //             {
+        //                 if (mission_pos_cruise(x, y, z, t_yaw, err_max))
+        //                     mode = 7;
+        //             }
+        //             else
+        //             {
+        //                 ROS_INFO("非圆环！");
+        //                 mode = 7;
+        //             }
+        //         }
+        //         else
+        //         {
+        //             ROS_WARN("环中心位置高度:(%f)", nearest_ring[1] + local_pos.pose.pose.position.z);
+        //             mode = 5;
+        //         }
+        //         counts = 1;
+        //     }
+        //     break;
+        // }
+        // case 5:
+        // {
+        //     if (move_in_drone_coordinate(0, 0, -nearest_ring[1], 0, err_max))
+        //     {
+        //         isinit = false;
+        //         ROS_INFO("竖直位置矫正完成！");
+        //         mode = 6;
+        //     }
+        //     break;
+        // }
         case 6:
         {
             if (move_in_drone_coordinate(1.4, 0, 0.1, 0, err_max))
@@ -275,18 +276,16 @@ bool cross_ring(double x, double y, double z, double t_yaw, double err_max)
         }
         case 7:
         {
-            ROS_INFO("寻找下一圆环");
-            mode = 1;
-            find_ring = false;
+            if (mission_pos_cruise(x, y, z, t_yaw, err_max)){
+                mode = 1;
+                find_ring = false;
+                cross_ring_flag = false;
+                ROS_INFO("穿环完成！");
+                return true;
+            }
             break;
         }
         }
-    }
-    if (total_distance <= err_max)
-    {
-        ROS_INFO("穿环完成！");
-        cross_ring_flag = false;
-        return true;
     }
     return false;
 }

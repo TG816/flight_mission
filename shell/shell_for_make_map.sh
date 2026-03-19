@@ -19,7 +19,7 @@ tmux select-layout -t ros_session:0 tiled
 tmux new-window -t ros_session:1 -n monitors_mission
 
 # Pane 0: /mavros/local_position/pose
-tmux send-keys -t ros_session:1 'sleep 6; rostopic echo /mavros/local_position/pose' C-m
+tmux send-keys -t ros_session:1 'sleep 6; source ~/first_task_ws/devel/setup.bash; rosrun cloud_template cloud_template_node' C-m
 
 # Pane 3: complete_mission.launch
 tmux split-window -v -t ros_session:1

@@ -45,20 +45,30 @@ float map_length = 11.0f;
 // 视觉相关
 cv::Mat current_frame;
 bool got_image = false;
-std::string target_color;
-geometry_msgs::Point cr_world;
-cv::Point2f color_center;
-bool color_detected = false;
-std::string detected_color = "";
-double balance_y = -6.0;
 cv::Mat camera_matrix = (cv::Mat_<double>(3, 3) << 1520.0, 0.0, 960.0,
                          0.0, 1520.0, 540.0,
                          0.0, 0.0, 1.0);
-cv::CascadeClassifier face_cascade;
-bool face_detected = false;
-cv::Rect face_rect;
-geometry_msgs::Point face_world;
-float cruise_v = 0.5;
+int H_direction = 0; //0就是没有，1就是left，-1就是right
+
+
+
+// -------------------------- 配置参数（无人机场景优化） --------------------------
+const float CONF_THRESHOLD = 0.4f;
+const float SEARCH_RADIUS_SCALE = 2.0f;  // 灰环中心搜索黑正方形的范围（直径2倍）
+const float INNER_IMG_SCALE = 0.7f;      // 中心图片占白色圆比例
+const float APPROX_EPSILON = 0.03f;      // 轮廓逼近阈值（宽松，适配透视）
+const std::string ONNX_MODEL_PATH = "/home/jetson/first_task_ws/src/flight_mission/best.onnx"; // 需替换为实际模型路径
+const bool USE_GPU = false;              // 是否使用GPU推理
+
+// 颜色范围（HSV，适配无人机下视光照）
+const cv::Scalar GRAY_LOW = cv::Scalar(0, 0, 100);
+const cv::Scalar GRAY_HIGH = cv::Scalar(180, 50, 200);
+const cv::Scalar BLACK_LOW = cv::Scalar(0, 0, 0);
+const cv::Scalar BLACK_HIGH = cv::Scalar(180, 255, 50);
+const cv::Scalar WHITE_LOW = cv::Scalar(0, 0, 200);
+const cv::Scalar WHITE_HIGH = cv::Scalar(180, 50, 255);
+
+const cv::Size MORPHO_KERNEL = cv::Size(5, 5);  // 形态学核（轻量化）
 
 // 通用工具相关
 int timepiece = 1;
@@ -73,12 +83,27 @@ Obstacle Obs;
 Map M(map_width, map_length, map_cellsize);
 std::vector<GridPoint> Path;
 
-// 颜色范围定义
-std::vector<ColorRange> color_ranges = {
-    ColorRange(cv::Scalar(0, 70, 50), cv::Scalar(10, 255, 255), "red"),
-    ColorRange(cv::Scalar(170, 70, 50), cv::Scalar(180, 255, 255), "red"),
-    ColorRange(cv::Scalar(40, 70, 50), cv::Scalar(80, 255, 255), "green"),
-    ColorRange(cv::Scalar(100, 70, 50), cv::Scalar(130, 255, 255), "blue")};
+//检查类别定义
+// CIFAR100 类别列表（与Python版本一致）
+const std::vector<std::string> CIFAR100_CLASSES = {
+    "apple", "aquarium_fish", "baby", "bear", "beaver", "bed", "bee", "beetle", 
+    "bicycle", "bottle", "bowl", "boy", "bridge", "bus", "butterfly", "camel", 
+    "can", "castle", "caterpillar", "cattle", "chair", "chimpanzee", "clock", 
+    "cloud", "cockroach", "couch", "crab", "crocodile", "cup", "dinosaur", 
+    "dolphin", "elephant", "flatfish", "forest", "fox", "girl", "hamster", 
+    "house", "kangaroo", "keyboard", "lamp", "lawn_mower", "leopard", "lion",
+    "lizard", "lobster", "man", "maple_tree", "motorcycle", "mountain", "mouse", 
+    "mushroom", "oak_tree", "orange", "orchid", "otter", "palm_tree", "pear",
+    "pickup_truck", "pine_tree", "plain", "plate", "poppy", "porcupine",
+    "possum", "rabbit", "raccoon", "ray", "road", "rocket", "rose",
+    "sea", "seal", "shark", "shrew", "skunk", "skyscraper", "snail", "snake",
+    "spider", "squirrel", "streetcar", "sunflower", "sweet_pepper", "table",
+    "tank", "telephone", "television", "tiger", "tractor", "train", "trout",
+    "tulip", "turtle", "wardrobe", "whale", "willow_tree", "wolf", "woman", "worm"
+};
+
+// ========== 全局变量：存储二维码解析后的目标类别 ==========
+std::vector<std::string> g_qrcode_classes;
 
 // 扩张用数组
 int dx[EXPAND_TWO] = {1, 1, 0, -1, -1, -1, 0, 1, 2, 0, -2, 0, 2, 2, 1, -1, -2, -2, -2, -2, -1, 1, 2, 2};

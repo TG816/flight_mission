@@ -4,32 +4,32 @@
 /************************************************************************
 通用工具函数实现
 *************************************************************************/
-double call_len(std::vector<float> p, double angle1, double angle2) // angle1为start，angle2为end
+double call_len(std::vector<float> p, int angle1, int angle2) // angle1为start，angle2为end
 {
     // 利用余弦定理
-    double edge1 = p[(int)angle1];
-    double edge2 = p[(int)angle2];
-    double dif_angle = angle2 - angle1;
-    return sqrt(edge1 * edge1 + edge2 * edge2 - 2 * edge1 * edge2 * cos(dif_angle / 180 * 3.1415926));
+    double edge1 = p[angle1];
+    double edge2 = p[angle2];
+    int dif_angle = angle2 - angle1;
+    return sqrt(edge1 * edge1 + edge2 * edge2 - 2 * edge1 * edge2 * cos((float)dif_angle / 180 * 3.1415926));
 }
 
-double call_mid_len(std::vector<float> p, double angle1, double angle2) // angle1为start，angle2为end
+double call_mid_len(std::vector<float> p, int angle1, int angle2) // angle1为start，angle2为end
 {
     // 利用余弦定理
-    double edge1 = p[(int)angle1];
-    double edge2 = p[(int)angle2];
-    double dif_angle = angle2 - angle1;
-    return sqrt(edge1 * edge1 + edge2 * edge2 + 2 * edge1 * edge2 * cos(dif_angle / 180 * 3.1415926)) / 2; // 注意此处变为加号,计算的是已知角度的补角
+    double edge1 = p[angle1];
+    double edge2 = p[angle2];
+    int dif_angle = angle2 - angle1;
+    return sqrt(edge1 * edge1 + edge2 * edge2 + 2 * edge1 * edge2 * cos((float)dif_angle / 180 * 3.1415926)) / 2; // 注意此处变为加号,计算的是已知角度的补角
 }
 
-double cal_y(std::vector<float> p, double angle)
+double cal_y(std::vector<float> p, int angle)
 {
-    return -cos(angle / 180 * 3.1415926) * p[(int)angle];
+    return -cos((float)angle / 180 * 3.1415926) * p[angle];
 }
 
-double cal_x(std::vector<float> p, double angle)
+double cal_x(std::vector<float> p, int angle)
 {
-    return sin(angle / 180 * 3.1415926) * p[(int)angle];
+    return sin((float)angle / 180 * 3.1415926) * p[angle];
 }
 
 /************************************************************************
@@ -71,28 +71,36 @@ float GridPointDiatance(const GridPoint &p1, const GridPoint &p2)
     return sqrt((p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y));
 }
 
-void print2DArrayROS(int **grid, int cols, int rows)
-{
-    if (grid == nullptr || cols <= 0 || rows <= 0)
-    {
+void print2DArrayROS(int** grid, int cols, int rows) {
+    if (grid == nullptr || cols <= 0 || rows <= 0) {
         ROS_WARN("二维数组未初始化，无法打印！");
         return;
     }
-    GridPoint gp = M.PointToGridPoint({local_pos.pose.pose.position.x, local_pos.pose.pose.position.y});
+    //--------------------
+    for(auto it = Path.begin();it != Path.end();++it){
+        grid[it->x][it->y] = 2 ;
+    }
+    //-------------------
+    GridPoint gp=M.PointToGridPoint({local_pos.pose.pose.position.x,local_pos.pose.pose.position.y});
 
     ROS_INFO("========== 二维数组打印开始 [cols=%d, rows=%d] ==========", cols, rows);
-    for (int x = min(gp.x + 7, rows - 1); x >= 0 && x > gp.x - 2; --x)
-    {
+    for (int x = min(gp.x+5,rows-1); x>=0&&x>gp.x-5; --x) {
         std::stringstream ss;
-        for (int y = min(gp.y + 10, cols - 1); y > 0 && y > gp.y - 10; --y)
-        {
-            ss << grid[x][y] << " ";
+        for (int y = min(gp.y+10,cols-1); y>0&&y>gp.y-10; --y) {
+            if(x==gp.x&&y==gp.y) ss << "❤" << " ";
+            else if(grid[x][y] == 2) ss << "■" << " ";
+            else ss << grid[x][y] << " ";
         }
         ROS_INFO_STREAM(ss.str());
     }
     ROS_INFO("========== 二维数组打印结束 ==========\n");
-}
 
+    //---------------------
+    for(auto it = Path.begin();it != Path.end();++it){
+        grid[it->x][it->y] = 0 ;
+    }
+    //---------------------
+}
 GridPoint Fusion_Gpoint(int fused_num)
 {
     int count = 0;
@@ -147,6 +155,14 @@ void init_location(double &init_x, double &init_y, double &init_z, double &init_
     init_z = local_pos.pose.pose.position.z - init_position_z_take_off;
     init_yaw = yaw * 180 / M_PI;
     isinit = true;
+}
+
+float min_obs_fuc(){
+    float min_obs=0.35f;
+    for(int i=60;i<=120;++i){
+        if(distance_bins_rotate.at(i)<min_obs) min_obs = distance_bins_rotate.at(i);
+    }
+    return min_obs;
 }
 
 geometry_msgs::Point change_to_world(float u, float v)
