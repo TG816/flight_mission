@@ -70,7 +70,7 @@ void find_obstacal()
     }
 }
 
-GridPoint out_of_danger(const GridPoint &now, int mode = 1)
+GridPoint out_of_danger(const GridPoint &now, int mode)
 {
     GridPoint safePoint(0, 0, -1, -1);
     if (mode == 1)
@@ -142,7 +142,7 @@ bool collision_avoidance_mission(float target_x, float target_y, float target_z,
     {
         // 如果在终点附近直接前往
         float dis = M.Euclidean(start, end);
-        if (dis <= 5)
+        if (dis <= 3)
         {
             Pnext = {target_x, target_y};
             ROS_INFO("直接前往终点");
@@ -164,7 +164,7 @@ bool collision_avoidance_mission(float target_x, float target_y, float target_z,
             {
                 ROS_INFO("寻路成功");
                 ROS_INFO("多点综合");
-                next = Fusion_Gpoint(3);
+                next = Fusion_Gpoint(5);
                 ROS_INFO("综合完成%d %d", next.x, next.y);
             }
             else
@@ -183,7 +183,7 @@ bool collision_avoidance_mission(float target_x, float target_y, float target_z,
         }
     }
 
-    print2DArrayROS(M.Grid, M.Xnum, M.Ynum);
+    //print2DArrayROS(M.Grid, M.Xnum, M.Ynum);
     ROS_INFO("now (%.2f,%.2f,%.2f,%.2f)", local_pos.pose.pose.position.x, local_pos.pose.pose.position.y, local_pos.pose.pose.position.z, yaw * 180.0 / M_PI);
 
     // float dse_yaw = atan2(target_y-local_pos.pose.pose.position.y,target_x-local_pos.pose.pose.position.x);

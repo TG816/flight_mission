@@ -48,10 +48,27 @@ bool got_image = false;
 cv::Mat camera_matrix = (cv::Mat_<double>(3, 3) << 1520.0, 0.0, 960.0,
                          0.0, 1520.0, 540.0,
                          0.0, 0.0, 1.0);
-const float MIN_CIRCLE_RATIO = 0.7f;
-const float MAX_CIRCLE_RATIO = 0.95f;
-const float INNER_CIRCLE_RATIO = 2.0f/3.0f;
-const float CENTER_IMG_RATIO = 0.7f;
+int H_direction = 0; //0就是没有，1就是left，-1就是right
+
+
+
+// -------------------------- 配置参数（无人机场景优化） --------------------------
+const float CONF_THRESHOLD = 0.4f;
+const float SEARCH_RADIUS_SCALE = 2.0f;  // 灰环中心搜索黑正方形的范围（直径2倍）
+const float INNER_IMG_SCALE = 0.7f;      // 中心图片占白色圆比例
+const float APPROX_EPSILON = 0.03f;      // 轮廓逼近阈值（宽松，适配透视）
+const std::string ONNX_MODEL_PATH = "/home/jetson/first_task_ws/src/flight_mission/best.onnx"; // 需替换为实际模型路径
+const bool USE_GPU = false;              // 是否使用GPU推理
+
+// 颜色范围（HSV，适配无人机下视光照）
+const cv::Scalar GRAY_LOW = cv::Scalar(0, 0, 100);
+const cv::Scalar GRAY_HIGH = cv::Scalar(180, 50, 200);
+const cv::Scalar BLACK_LOW = cv::Scalar(0, 0, 0);
+const cv::Scalar BLACK_HIGH = cv::Scalar(180, 255, 50);
+const cv::Scalar WHITE_LOW = cv::Scalar(0, 0, 200);
+const cv::Scalar WHITE_HIGH = cv::Scalar(180, 50, 255);
+
+const cv::Size MORPHO_KERNEL = cv::Size(5, 5);  // 形态学核（轻量化）
 
 // 通用工具相关
 int timepiece = 1;
@@ -65,7 +82,6 @@ ring z_ring(0.25, 0.1, 0.85, 0.20);
 Obstacle Obs;
 Map M(map_width, map_length, map_cellsize);
 std::vector<GridPoint> Path;
-Config cfg({"",0.5f,true}); //缺onnx路径
 
 //检查类别定义
 // CIFAR100 类别列表（与Python版本一致）

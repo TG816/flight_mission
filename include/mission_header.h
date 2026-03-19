@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <queue>
+#include <quirc.h>
 #include <cmath>
 #include <climits>
 #include <cstring>
@@ -34,7 +35,10 @@
 #include <opencv2/objdetect.hpp>
 #include <opencv2/opencv.hpp>
 #include <sensor_msgs/Image.h>
+#include <opencv2/imgproc/imgproc_c.h>
 #include <onnxruntime_cxx_api.h> //yolo新加
+#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 // 动态参数
 // 回退逻辑
 
@@ -43,8 +47,10 @@ using namespace std;
 /************************************************************************
 全局常量定义
 *************************************************************************/
-#define ALTITUDE 1.25f
+#define ALTITUDE 2.0f
 #define LOW_ALTITUDE 0.5f //待定
+#define COUNTS 1  // 需要无人机转的圈数                        //待定，目标是超过70圈
+#define TIMES 420  //转圈的最大时长，一旦超时剩多少圈都不转了    //7分钟？
 #define OBSTACLE_WIDTH 0.3
 #define EPS 1e-3
 #define EXPAND_ONE 8
@@ -103,12 +109,27 @@ extern float weight[EXPAND_ONE];
 extern cv::Mat current_frame;
 extern bool got_image;
 extern cv::Mat camera_matrix;
-extern const float MIN_CIRCLE_RATIO = 0.7f;
-extern const float MAX_CIRCLE_RATIO = 0.95f;
-extern const float INNER_CIRCLE_RATIO = 2.0f/3.0f;
-extern const float CENTER_IMG_RATIO = 0.7f;
+extern int H_direction; 
 extern std::vector<std::string> g_qrcode_classes;
 extern const std::vector<std::string> CIFAR100_CLASSES;
+
+// 注意：extern 仅做声明，具体定义需在某个 .cpp 文件中实现（无 extern 关键字）
+extern const float CONF_THRESHOLD;
+extern const float SEARCH_RADIUS_SCALE;  // 灰环中心搜索黑正方形的范围（直径2倍）
+extern const float INNER_IMG_SCALE;      // 中心图片占白色圆比例
+extern const float APPROX_EPSILON;      // 轮廓逼近阈值（宽松，适配透视）
+extern const std::string ONNX_MODEL_PATH; // 需替换为实际模型路径
+extern const bool USE_GPU;              // 是否使用GPU推理
+
+// 颜色范围（HSV，适配无人机下视光照）
+extern const cv::Scalar GRAY_LOW;
+extern const cv::Scalar GRAY_HIGH;
+extern const cv::Scalar BLACK_LOW;
+extern const cv::Scalar BLACK_HIGH;
+extern const cv::Scalar WHITE_LOW;
+extern const cv::Scalar WHITE_HIGH;
+
+extern const cv::Size MORPHO_KERNEL;  // 形态学核（轻量化）
 
 // 通用工具相关
 extern int timepiece;
@@ -188,28 +209,16 @@ public:
 };
 
 
-// 配置参数结构体
-struct Config {
-    std::string model_path;
-    float conf_threshold = 0.5f;
-    bool use_gpu = false;
-};
+// -------------------------- 结构体：无人机检测结果（供飞控调用） --------------------------
 
-extern Config cfg;
-
-struct RoughTargetInfo {  // 粗识别结果（正方形+圆形合一）
-    cv::Rect outer_square;  // 外层正方形
-    float cx = 0, cy = 0, radius = 0;  // 外层圆核心参数
-    bool is_valid = false;  // 是否检测到有效目标
-};
-
-struct RecognizeResult {
-    bool success = false;
-    std::string cls_name;
-    float conf = 0;
-    RoughTargetInfo rough_info;
-    cv::Rect center_img;
-    float x = 0, y = 0;  // 图片中心位置
+struct UavDetectResult {
+    bool is_detected = false;          // 是否检测到靶子
+    std::string class_name = "unknown";// 分类类别（修复：与实现对齐）
+    float confidence = 0.0f;           // 分类置信度
+    cv::Point gray_ring_center;        // 灰环中心（修复：与实现对齐）
+    cv::Rect black_square;             // 黑色正方形
+    float square_angle = 0.0f;         // 正方形偏转角度
+    cv::Rect inner_image_rect;         // 中心图片区域（修复：与实现对齐）
 };
 
 /************************************************************************

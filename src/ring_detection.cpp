@@ -35,7 +35,7 @@ void stick::FindStick(std::vector<float> p)
                     	 len = call_len(p, start, end);
                     	 if (len < stick_width + std_stick_err && len > stick_width - std_stick_err){
                         stick_angle.push_back(Angle(start, end));
-                        ROS_INFO("添加障碍物(%f,%f)，宽度%f", start, end, len);
+                        ROS_INFO("添加障碍物(%d,%d)，宽度%f", start, end, len);
                         }
                     }
                 }else continue;
