@@ -9,8 +9,8 @@ Map::Map(float _width, float _length, float _cellsize)
 {
     Xnum = (ceil(length / CellSize) + 2);
     Ynum = (ceil(width / CellSize) + 2);
-    delta_y = static_cast<int>(7.5 / CellSize);
-    delta_x = static_cast<int>(1.0 / CellSize);
+    delta_y = static_cast<int>(3.0 / CellSize);
+    delta_x = static_cast<int>(2.0 / CellSize);
     Grid = new int *[Xnum];
     for (int i = 0; i < Xnum; ++i)
     {

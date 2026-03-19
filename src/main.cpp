@@ -4,8 +4,7 @@
 #include "vision_detection.h"
 #include "mission_callbacks.h"
 #include "mission_header.h"
-
-#define DELAY 1.0
+#define DELAY 2.0
 #define LEFT 90
 #define RIGHT -90
 #define BACK -179
@@ -15,6 +14,9 @@ float if_debug = 0;
 float err_max = 0.2;
 bool delay = false;
 ros::Time last_request;
+
+geometry_msgs::Point circular_center_world;
+
 void print_param()
 {
     std::cout << "=== 控制参数 ===" << std::endl;
@@ -32,10 +34,7 @@ void Delay(float delay_time)
     if (delay)
     {
         ros::Duration delta_time = ros::Time::now() - last_request;
-        if (delta_time.toSec() > 0)
-            ROS_WARN("延时%.2f s", delta_time.toSec());
-        else
-            last_request = ros::Time::now();
+        ROS_WARN("延时%.2f s", delta_time.toSec());
         if (ros::Time::now() - last_request >= ros::Duration(delay_time))
         {
             ROS_INFO("延时结束");
@@ -57,13 +56,21 @@ int main(int argc, char **argv)
     setlocale(LC_ALL, "");
 
     // 初始化ROS节点
-    ros::init(argc, argv, "flight_mission");
+    ros::init(argc, argv, "collision_avoidance");
     ros::NodeHandle nh;
 
     // 订阅mavros相关话题
     ros::Subscriber state_sub = nh.subscribe<mavros_msgs::State>("mavros/state", 10, state_cb);
     ros::Subscriber local_pos_sub = nh.subscribe<nav_msgs::Odometry>("/mavros/local_position/odom", 10, local_pos_cb);
+
+    
+    //订阅相机话题
     ros::Subscriber image_sub = nh.subscribe<sensor_msgs::Image>("/camera/image_raw", 10, image_cb);
+    
+    //订阅前置相机话题
+    ros::Subscriber front_image_sub = nh.subscribe<sensor_msgs::Image>("/front_camera/image_raw", 10, front_image_cb);
+
+
     // 发布无人机多维控制话题
     ros::Publisher mavros_setpoint_pos_pub = nh.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 100);
     ros::Subscriber livox_sub = nh.subscribe<livox_ros_driver::CustomMsg>("/livox/lidar", 10, livox_custom_cb);
@@ -78,30 +85,19 @@ int main(int argc, char **argv)
 
     // 参数读取
 
-    nh.param<float>("err_max", err_max, 0.2);
+    nh.param<float>("err_max", err_max, 0);
     nh.param<float>("if_debug", if_debug, 0);
     nh.param<double>("zero_plane_height", zero_plane_height, 0);
     nh.param<double>("height_threshold", height_threshold, 0.05);
     nh.param<double>("min_range", min_range, 0.1);
     nh.param<double>("max_range", max_range, 30.0);
     nh.param<int>("num_bins", num_bins, 360);
-    //nh.param<std::string>("target_color", target_color, "blue");
+    nh.param<std::string>("target_color", target_color, "blue");
 
-    nh.param<float>("map_cellsize", map_cellsize, 0.10);
+    nh.param<float>("map_cellsize", map_cellsize, 0.15);
     nh.param<float>("map_width", map_width, 10.0);
     nh.param<float>("map_length", map_length, 10.0);
     print_param();
-
-    // std::string cascade_path = "/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml";
-    // if (!face_cascade.load(cascade_path))
-    // {
-    //     ROS_ERROR("无法加载人脸检测器分类器文件：%s", cascade_path.c_str());
-    //     return -1;
-    // }
-    // else
-    // {
-    //     ROS_INFO("成功加载人脸检测器分类器文件");
-    // }
 
     int choice = 0;
     std::cout << "1 to go on , else to quit" << std::endl;
@@ -196,169 +192,178 @@ int main(int argc, char **argv)
         ROS_WARN("mission_num = %d", mission_num);
         switch (mission_num)
         {
-        case 1:  //起飞
+        // mission1: 起飞
+        case 1:
             if (mission_pos_cruise(0, 0, ALTITUDE, 0, err_max))
             {
                 Delay(DELAY);
+
             }
             break;
-        case 2: //前进1米8 (1个我的距离)
-            if (collision_avoidance_mission(1.8, 0, LOW_ALTITUDE, 0, err_max))
+   
+        case 2://任务一，避障到识别区
+             if (collision_avoidance_mission(3.8, 0, ALTITUDE, 0, err_max))
             {
-                Delay(0.5);
+                Delay(DELAY);
             }
-            break;
-        case 3: //扫码
-            if (detectQRCodeAndExtractInfo())
-            {
-                mission_num = 4; // 理论上完全可以Delay(0);
-            }
-            break;
-        case 4: //准备转圈
-            if (collision_avoidance_mission(3.7, 0.6, ALTITUDE, 0, err_max))
-            {
-                Delay(0.5);
+            if(ERROR_DET){
+                	ROS_WARN("开始迫降");
+                	mission_num = 17;
             }
             break;
 
-        case 5:
-            if (Circle_around(COUNTS,TIMES,err_max))
+         case 3://先转向
+            if (mission_pos_cruise(3.8,0,ALTITUDE,LEFT,err_max))
             {
                 Delay(DELAY);
             }
             break;
 
-        case 6:
-            if (collision_avoidance_mission(3.6, 1.6, ALTITUDE, 0, err_max))
-            {
-                Delay(2);
+
+        case 4://任务二，巡航识别
+            if(detected){
+                Delay(DELAY);
+            }
+            if( cruise_finding(3.8, 0, ALTITUDE,LEFT, err_max,0.6)){
+                ROS_INFO("完成le巡航");
+                 Delay(DELAY);
             }
             break;
-        case 7:
-            if (onFrame(0, err_max))
+ 
+     
+  
+        case 5://任务三，避障到投放区
+          if(detected){
+                if(QR_detected){ROS_WARN("检测到二维码！");}
+                else{ROS_WARN("检测到数字或字母:%s",num_or_letter.c_str());}
+            }
+            else{ROS_WARN("NOT detected anything");}
+             if (collision_avoidance_mission(3.42, 3.07, ALTITUDE, LEFT, err_max))
             {
-                Delay(0.2);
+                Delay(DELAY);
+            }
+            if(ERROR_DET){
+                	ROS_WARN("开始迫降");
+                	mission_num = 17;
             }
             break;
-        case 8:
-            if (collision_avoidance_mission(1.8, 1.6, ALTITUDE, 0, err_max))
-            {
-                Delay(2);
+
+        case 6://任务四，巡航并识别投放区
+           if(circular_found){
+            ROS_INFO("找到投放点");
+            Delay(DELAY);
+           }
+           if(cruise_finding_circular(3.42, 3.2, ALTITUDE, LEFT, err_max, 0.9)){
+                ROS_INFO("完成le巡航");
+                 Delay(DELAY);
+           }
+             break;
+ 
+        case 7://任务四，识别成功就投放，投放逻辑待添加
+            if(circular_found){
+                circular_center_world=change_to_world(circular_center.x,circular_center.y);
+                 ROS_INFO("前往投放点,投放点世界坐标: x:%2f,y:%.2f",circular_center_world.x,circular_center_world.y);
+               if (mission_pos_cruise(circular_center_world.x,circular_center_world.y,ALTITUDE,LEFT,err_max))
+            {   ROS_INFO("到达投放点,投放点世界坐标: x:%2f,y:%.2f",circular_center_world.x,circular_center_world.y);
+                /*添加投放代码*/
+                ROS_WARN("投放。。。");
+                Delay(DELAY);
+            }
+            }
+            else{
+                ROS_WARN("没找到投放点");
+                 Delay(DELAY);
             }
             break;
-        case 9:
-            if (onFrame(0, err_max))
+        case 8://任务五，转向后方
+            if (mission_pos_cruise(local_pos.pose.pose.position.x,local_pos.pose.pose.position.y, ALTITUDE, BACK, err_max))
             {
-                Delay(0.2);
+                Delay(DELAY);
+
             }
             break;
-        case 10:
-            if (collision_avoidance_mission(1.8, -1.6, ALTITUDE, 0, err_max))
+        
+        case 9://任务五，朝识别目标移动一点，防止识别时碰到障碍物
+            if (collision_avoidance_mission(2.72, 3.07, ALTITUDE, BACK, err_max))
             {
-                Delay(2);
+                Delay(DELAY);
+            }
+            if(ERROR_DET){
+                	ROS_WARN("开始迫降");
+                	mission_num = 17;
             }
             break;
-        case 11:
-            if (onFrame(0, err_max))
+        
+        case 10://任务五，识别目标并移动，发射激光逻辑待添加
+            if(move_to_target(front_frame,BACK)){
+                
+                ROS_WARN("识别了目标并移动到目标前");
+                ROS_WARN("发射激光  ");
+                /*添加发射激光逻辑*/
+                Delay(DELAY);
+            }
+        
+        case 11://从这之后是返回起飞点逻辑
+            if (mission_pos_cruise(local_pos.pose.pose.position.x,local_pos.pose.pose.position.y, ALTITUDE,0, err_max))
             {
-                Delay(0.2);
+                Delay(DELAY);
             }
             break;
+        
         case 12:
-            if (collision_avoidance_mission(3.6, -1.6, ALTITUDE, 0, err_max))
-            {
-                Delay(2);
-            }
-            break;
-        case 13:
-            if (onFrame(0, err_max))
-            {
-                Delay(0.2);
-            }
-            break;
-        case 14:
-            if (collision_avoidance_mission(6.0, -2.5, ALTITUDE, 0, err_max))
+            if (collision_avoidance_mission(3.42, 3.07, ALTITUDE, 0, err_max))
             {
                 Delay(DELAY);
+            }
+            if(ERROR_DET){
+                	ROS_WARN("开始迫降");
+                	mission_num = 17;
+            }
+            break;
+        
+        case 13:
+        //向右转
+            if (mission_pos_cruise(3.42, 3.07, ALTITUDE,RIGHT, err_max))
+            {
+                Delay(DELAY);
+            }
+            break;
+
+        case 14:
+        if (collision_avoidance_mission(3.8, 0, ALTITUDE, RIGHT, err_max))
+            {
+                Delay(DELAY);
+            }
+            if(ERROR_DET){
+                	ROS_WARN("开始迫降");
+                	mission_num = 17;
             }
             break;
 
         case 15:
-            if (collision_avoidance_mission(6.0,-2.5, 1.5, LEFT, err_max))
+        //再转
+           if (mission_pos_cruise(3.8,0, ALTITUDE,BACK, err_max))
             {
-                Delay(0.2);
+                Delay(DELAY);
             }
             break;
+
         case 16:
-            if (cross_ring(6.0, 0.0, 1.5, LEFT, err_max))
+          if (collision_avoidance_mission(0, 0, ALTITUDE,BACK, err_max))
             {
-                Delay(0.2);
+                Delay(DELAY);
             }
-            break;
+            if(ERROR_DET){
+                	ROS_WARN("开始迫降");
+                	mission_num = 17;
+            }
+            break;    
+
         case 17:
-            if (collision_avoidance_mission(6.0, 1.0, ALTITUDE, LEFT, err_max))
-            {
-                Delay(DELAY);
-            }
-            break;
-        case 18:
-            if (/*特殊靶识别并投标函数*/1)
-            {
-                Delay(DELAY);
-            }
-            break;
-        case 19:
-            if (collision_avoidance_mission(3.5, 1.0, ALTITUDE, LEFT, err_max))
-            {
-                Delay(DELAY);
-            }
-            break;
-        case 20:
-            if (collision_avoidance_mission(0, 1.6 * H_direction, ALTITUDE, LEFT, err_max))
-            {
-                Delay(0.2);
-            }
-            break;
-        case 21:
-            if (collision_avoidance_mission(0, 1.6 * H_direction, ALTITUDE, 0, err_max))
-            {
-                Delay(DELAY);
-            }
-            break;
-            
-
-            // case 11:
-            //     if (collision_avoidance_mission(3.5 , -6.3 , ALTITUDE,0, err_max))
-            //     {
-            //         Delay(DELAY);
-            //     }
-            //     break;
-
-            // case 12:
-            //     if (mission_pos_cruise(3.5 , -6.3 , ALTITUDE, 0, err_max))
-            //     {
-            //         Delay(DELAY);
-            //     }
-            //     break;
-
-            // case 13:
-            //     if (collision_avoidance_mission(0 , 0 , ALTITUDE,0, err_max))
-            //     {
-            //         Delay(DELAY);
-            //     }
-            //     break;
-
-            // case 14:
-            //     if (mission_pos_cruise(0 , 0 , ALTITUDE,0, err_max))
-            //     {
-            //         Delay(DELAY);
-            //     }
-            //     break;
-
-        case 22:
             if (precision_land())
             {
-                mission_num = -1;
+                mission_num = -1; // 任务结束
+                last_request = ros::Time::now();
             }
             break;
         }
@@ -373,3 +378,4 @@ int main(int argc, char **argv)
     }
     return 0;
 }
+

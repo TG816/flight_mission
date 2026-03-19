@@ -1,15 +1,12 @@
 #ifndef MISSION_HEADER_H
 #define MISSION_HEADER_H
-
 #include <string>
 #include <vector>
 #include <queue>
-#include <quirc.h>
 #include <cmath>
 #include <climits>
 #include <cstring>
 #include <cstdlib>
-#include <numeric>
 #include <algorithm>
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -35,12 +32,9 @@
 #include <opencv2/objdetect.hpp>
 #include <opencv2/opencv.hpp>
 #include <sensor_msgs/Image.h>
-#include <opencv2/imgproc/imgproc_c.h>
-#include <onnxruntime_cxx_api.h> //yolo新加
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
-// 动态参数
-// 回退逻辑
+
+#include <tesseract/baseapi.h>
+#include <leptonica/allheaders.h>
 
 using namespace std;
 
@@ -48,9 +42,6 @@ using namespace std;
 全局常量定义
 *************************************************************************/
 #define ALTITUDE 2.0f
-#define LOW_ALTITUDE 0.5f //待定
-#define COUNTS 1  // 需要无人机转的圈数                        //待定，目标是超过70圈
-#define TIMES 420  //转圈的最大时长，一旦超时剩多少圈都不转了    //7分钟？
 #define OBSTACLE_WIDTH 0.3
 #define EPS 1e-3
 #define EXPAND_ONE 8
@@ -62,7 +53,7 @@ using namespace std;
 全局变量声明
 *************************************************************************/
 // 飞控相关
-extern mavros_msgs::PositionTarget setpoint_raw;
+extern mavros_msgs::PositionTarget setpoint_raw;//
 extern mavros_msgs::State current_state;
 extern nav_msgs::Odometry local_pos;
 extern tf::Quaternion quat;
@@ -74,7 +65,7 @@ extern float init_yaw_take_off;
 extern bool flag_init_position;
 
 // 激光雷达相关
-extern double nearest_ring[2];
+extern double nearest_ring[2];//
 extern double display[2];
 extern bool cross_ring_flag;
 extern bool find_ring;
@@ -82,7 +73,7 @@ extern std::vector<float> distance_bins;
 extern std::vector<float> distance_bins_rotate;
 extern std::vector<float> distance_bins_up;
 extern std::vector<int> count_bins;
-extern std::vector<int> points_on_ring;
+extern std::vector<int> points_on_ring;//
 extern float distance_c;
 extern int angle_c;
 extern const float point_err_x;
@@ -108,28 +99,25 @@ extern float weight[EXPAND_ONE];
 // 视觉相关
 extern cv::Mat current_frame;
 extern bool got_image;
+extern cv::Mat front_frame;
+extern bool got_front_image;
 extern cv::Mat camera_matrix;
-extern int H_direction; 
-extern std::vector<std::string> g_qrcode_classes;
-extern const std::vector<std::string> CIFAR100_CLASSES;
-
-// 注意：extern 仅做声明，具体定义需在某个 .cpp 文件中实现（无 extern 关键字）
-extern const float CONF_THRESHOLD;
-extern const float SEARCH_RADIUS_SCALE;  // 灰环中心搜索黑正方形的范围（直径2倍）
-extern const float INNER_IMG_SCALE;      // 中心图片占白色圆比例
-extern const float APPROX_EPSILON;      // 轮廓逼近阈值（宽松，适配透视）
-extern const std::string ONNX_MODEL_PATH; // 需替换为实际模型路径
-extern const bool USE_GPU;              // 是否使用GPU推理
-
-// 颜色范围（HSV，适配无人机下视光照）
-extern const cv::Scalar GRAY_LOW;
-extern const cv::Scalar GRAY_HIGH;
-extern const cv::Scalar BLACK_LOW;
-extern const cv::Scalar BLACK_HIGH;
-extern const cv::Scalar WHITE_LOW;
-extern const cv::Scalar WHITE_HIGH;
-
-extern const cv::Size MORPHO_KERNEL;  // 形态学核（轻量化）
+extern std::vector<ColorRange> color_ranges;
+extern bool QR_detected;//判断是否检测到QR
+extern string num_or_letter;
+extern bool num_or_letter_detected=false;
+extern bool detected;
+extern int aim_num;
+extern int detect_count;//每5帧检测一次
+extern float angle_cruise;
+extern float d_angle;
+extern bool center_detected;
+extern cv::Point2f circular_center;
+extern bool circular_found;
+extern bool center_detected_circular;
+extern int detect_count_circular;//每5帧检测一次
+extern float angle_cruise_circular;
+extern float d_angle_circular;
 
 // 通用工具相关
 extern int timepiece;
@@ -208,17 +196,12 @@ public:
     }
 };
 
-
-// -------------------------- 结构体：无人机检测结果（供飞控调用） --------------------------
-
-struct UavDetectResult {
-    bool is_detected = false;          // 是否检测到靶子
-    std::string class_name = "unknown";// 分类类别（修复：与实现对齐）
-    float confidence = 0.0f;           // 分类置信度
-    cv::Point gray_ring_center;        // 灰环中心（修复：与实现对齐）
-    cv::Rect black_square;             // 黑色正方形
-    float square_angle = 0.0f;         // 正方形偏转角度
-    cv::Rect inner_image_rect;         // 中心图片区域（修复：与实现对齐）
+// 颜色范围定义（HSV）
+struct ColorRange
+{
+    cv::Scalar lower;
+    cv::Scalar upper;
+    std::string name;
 };
 
 /************************************************************************

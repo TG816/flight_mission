@@ -8,490 +8,317 @@
 视觉相关函数实现
 *************************************************************************/
 
-
-
-// -------------------------- 独立实现 onFrame 函数 --------------------------
-bool onFrame(float t_yaw, double err_max) {
-    // 1. 打印帧处理日志
-    ROS_INFO("[onFrame] 开始处理图像帧 | 目标偏航：%.2f | 最大误差：%.2f", t_yaw, err_max);
+//用于任务二识别目标
+void detect_QR_num_letter(const cv::Mat &frame){
+    cv::Mat rotated_frame;
+    rotated_frame = frame.clone();  // 0 度直接复制
     
-    // 2. 调用无人机核心检测函数，获取自定义检测结果
-    UavDetectResult det_res = detectUavTarget();
+    cv::QRCodeDetector qrDecoder;
+    std::vector<cv::Point2f> corners;
+    QR_detected = qrDecoder.detect(rotated_frame, corners);
     
-    // 3. 检测失败处理：返回true（保留原有动态调整逻辑入口）
-    if (!det_res.is_detected || det_res.confidence < CONF_THRESHOLD) {
-        std::string fail_reason = det_res.is_detected ? "置信度低于阈值" : "未检测到靶子";
-        ROS_WARN("[onFrame] 目标识别失败 | 原因：%s | 图像帧为空：%s | 置信度：%.2f (阈值：%.2f)",
-                 fail_reason.c_str(),
-                 current_frame.empty() ? "是" : "否",
-                 det_res.confidence, CONF_THRESHOLD);
+    if(QR_detected){
+        ROS_INFO("QR detected!");
+        detected = true;
+    }
+    else{
+        // ========== 图像预处理优化 ==========
+        cv::Mat gray, blurred, binary, morph_closed, morph_opened;
         
-        // 动态调整逻辑示例（可按需扩展）：
-        // - 调整颜色阈值/搜索范围
-        // - 重试检测
-        // - 发送飞控指令调整无人机姿态
-        return true;
-    }
-
-    // 4. 检测成功：判断是否为二维码目标类别
-    bool is_target_class = std::find(
-        g_qrcode_classes.begin(), 
-        g_qrcode_classes.end(), 
-        det_res.class_name  // 修复：target_class → class_name
-    ) != g_qrcode_classes.end();
-
-
-    // 5. 非目标类别：打印日志并返回true
-    if (!is_target_class) {
-        ROS_INFO("[onFrame] 识别成功但非二维码目标 | 检测类别：%s | 目标列表包含类别数：%lu",
-                 det_res.class_name.c_str(), // 修复：target_class → class_name
-                 g_qrcode_classes.size());
-        return true;
-    }
-
-    // 6. 是目标类别：计算位置偏移
-    float target_x = static_cast<float>(det_res.gray_ring_center.x); // 修复：target_center → gray_ring_center
-    float target_y = static_cast<float>(det_res.gray_ring_center.y); // 修复：target_center → gray_ring_center
-    float drone_x = static_cast<float>(local_pos.pose.pose.position.x);
-    float drone_y = static_cast<float>(local_pos.pose.pose.position.y);
-    
-    float dx = target_x - drone_x;
-    float dy = target_y - drone_y;
-
-    ROS_INFO("[onFrame] 识别到二维码目标 | 类别：%s | 靶子中心：(%.1f,%.1f) | 无人机位置：(%.1f,%.1f) | 偏移(x/y)：%.2f/%.2f",
-             det_res.class_name.c_str(), // 修复：target_class → class_name
-             target_x, target_y,
-             drone_x, drone_y,
-             dx, dy);
-
-    // 7. 调用投掷函数（传入靶子中心坐标）
-    throwObject({target_x, target_y}, t_yaw, err_max);
-
-    return true;
-}
-
-
-// -------------------------- 工具函数 --------------------------
-cv::Mat getColorMask(const cv::Mat& frame, const cv::Scalar& low, const cv::Scalar& high) {
-    cv::Mat hsv, mask;
-    cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
-    cv::inRange(hsv, low, high, mask);
-    
-    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, MORPHO_KERNEL);
-    cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
-    cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
-    return mask;
-}
-
-bool findGrayRingCenter(const cv::Mat& frame, cv::Point& center, cv::Rect& gray_rect, int& radius) {
-    cv::Mat gray_mask = getColorMask(frame, GRAY_LOW, GRAY_HIGH);
-    
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(gray_mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-    if (contours.empty()) return false;
-
-    int max_idx = 0;
-    double max_area = 0.0;
-    for (int i = 0; i < contours.size(); ++i) {
-        double area = cv::contourArea(contours[i]);
-        if (area > max_area) {
-            max_area = area;
-            max_idx = i;
-        }
-    }
-    std::vector<cv::Point> max_gray_cnt = contours[max_idx];
-
-    cv::Moments m = cv::moments(max_gray_cnt);
-    if (m.m00 < 1e-6) return false;
-    center.x = static_cast<int>(m.m10 / m.m00);
-    center.y = static_cast<int>(m.m01 / m.m00);
-
-    gray_rect = cv::boundingRect(max_gray_cnt);
-    radius = std::max(gray_rect.width, gray_rect.height) / 2;
-
-    return true;
-}
-
-bool findBlackSquareAroundCenter(const cv::Mat& frame, const cv::Point& gray_center, int search_radius,
-                                cv::Rect& black_square, float& angle) {
-    int h = frame.rows;
-    int w = frame.cols;
-
-    int search_x1 = std::max(0, gray_center.x - search_radius);
-    int search_y1 = std::max(0, gray_center.y - search_radius);
-    int search_x2 = std::min(w, gray_center.x + search_radius);
-    int search_y2 = std::min(h, gray_center.y + search_radius);
-    cv::Mat search_roi = frame(cv::Rect(search_x1, search_y1, search_x2 - search_x1, search_y2 - search_y1));
-    if (search_roi.empty()) return false;
-
-    cv::Mat black_mask = getColorMask(search_roi, BLACK_LOW, BLACK_HIGH);
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(black_mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-    if (contours.empty()) return false;
-
-    int max_idx = 0;
-    double max_area = 0.0;
-    for (int i = 0; i < contours.size(); ++i) {
-        double area = cv::contourArea(contours[i]);
-        if (area > max_area) {
-            max_area = area;
-            max_idx = i;
-        }
-    }
-    std::vector<cv::Point> max_black_cnt = contours[max_idx];
-
-    std::vector<cv::Point> hull;
-    cv::convexHull(max_black_cnt, hull);
-    double epsilon = APPROX_EPSILON * cv::arcLength(hull, true);
-    std::vector<cv::Point> approx;
-    cv::approxPolyDP(hull, approx, epsilon, true);
-
-    std::vector<cv::Point> approx_abs;
-    for (const auto& p : approx) {
-        approx_abs.emplace_back(p.x + search_x1, p.y + search_y1);
-    }
-
-    int x1 = search_x1, y1 = search_y1, x2 = search_x2, y2 = search_y2;
-    if (!approx_abs.empty()) {
-        x1 = std::min_element(approx_abs.begin(), approx_abs.end(), 
-            [](const cv::Point& a, const cv::Point& b) { return a.x < b.x; })->x;
-        y1 = std::min_element(approx_abs.begin(), approx_abs.end(), 
-            [](const cv::Point& a, const cv::Point& b) { return a.y < b.y; })->y;
-        x2 = std::max_element(approx_abs.begin(), approx_abs.end(), 
-            [](const cv::Point& a, const cv::Point& b) { return a.x < b.x; })->x;
-        y2 = std::max_element(approx_abs.begin(), approx_abs.end(), 
-            [](const cv::Point& a, const cv::Point& b) { return a.y < b.y; })->y;
-    }
-    black_square = cv::Rect(x1, y1, x2 - x1, y2 - y1);
-
-    angle = 0.0f;
-    if (approx.size() >= 4) {
-        cv::Point p1 = approx[0];
-        cv::Point p2 = approx[1];
-        float dx = p2.x - p1.x;
-        float dy = p2.y - p1.y;
-        angle = atan2(dy, dx) * 180.0f / CV_PI;
-    }
-
-    return true;
-}
-
-bool findInnerImageRect(const cv::Mat& frame, const cv::Point& gray_center, const cv::Rect& black_square,
-                       cv::Rect& inner_img_rect) {
-    if (black_square.empty()) return false;
-
-    cv::Mat square_roi = frame(black_square);
-    cv::Mat white_mask = getColorMask(square_roi, WHITE_LOW, WHITE_HIGH);
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(white_mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-    if (contours.empty()) {
-        int img_size = static_cast<int>(black_square.width * INNER_IMG_SCALE);
-        inner_img_rect = cv::Rect(
-            std::max(0, gray_center.x - img_size / 2),
-            std::max(0, gray_center.y - img_size / 2),
-            img_size,
-            img_size
-        );
-        inner_img_rect &= cv::Rect(0, 0, frame.cols, frame.rows);
-        return true;
-    }
-
-    int max_idx = 0;
-    double max_area = 0.0;
-    for (int i = 0; i < contours.size(); ++i) {
-        double area = cv::contourArea(contours[i]);
-        if (area > max_area) {
-            max_area = area;
-            max_idx = i;
-        }
-    }
-    cv::Rect white_rect = cv::boundingRect(contours[max_idx]);
-    cv::Rect white_rect_abs = cv::Rect(
-        black_square.x + white_rect.x,
-        black_square.y + white_rect.y,
-        white_rect.width,
-        white_rect.height
-    );
-    int wc_x = white_rect_abs.x + white_rect_abs.width / 2;
-    int wc_y = white_rect_abs.y + white_rect_abs.height / 2;
-    int img_w = static_cast<int>(white_rect_abs.width * INNER_IMG_SCALE);
-    int img_h = static_cast<int>(white_rect_abs.height * INNER_IMG_SCALE);
-    inner_img_rect = cv::Rect(
-        std::max(0, wc_x - img_w / 2),
-        std::max(0, wc_y - img_h / 2),
-        img_w,
-        img_h
-    );
-    inner_img_rect &= cv::Rect(0, 0, frame.cols, frame.rows);
-
-    return true;
-}
-
-// -------------------------- 适配后的ONNX分类函数 --------------------------
-bool preciseClassify(const cv::Mat& frame, const cv::Rect& center_rect, 
-                     std::string& cls_name, float& conf) {
-    ROS_INFO("[preciseClassify] 开始精确分类 | 中心区域位置：(%d,%d) 尺寸：%dx%d | 置信度阈值：%f",
-             center_rect.x, center_rect.y, center_rect.width, center_rect.height, CONF_THRESHOLD);
-    if (center_rect.empty()) {
-        ROS_WARN("[preciseClassify] 中心区域为空，分类失败");
-        return false;
-    }
-    cv::Mat roi = frame(center_rect & cv::Rect(0,0,frame.cols,frame.rows));
-    ROS_INFO("[preciseClassify] 截取ROI | ROI最终尺寸：%dx%d", roi.cols, roi.rows);
-    
-    // 预处理+ONNX推理
-    cv::Mat resized, rgb;
-    cv::resize(roi, resized, cv::Size(32,32));
-    cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
-    cv::Mat float_img;
-    rgb.convertTo(float_img, CV_32F, 1.0/255.0);
-    
-    double min_val, max_val;
-    cv::minMaxLoc(float_img, &min_val, &max_val);
-    ROS_DEBUG("[preciseClassify] 预处理完成 | 归一化后图像范围：%.2f~%.2f", min_val, max_val);
-
-    std::vector<float> input_data(3*32*32);
-    int idx = 0;
-    for (int c=0; c<3; c++) {
-        for (int h=0; h<32; h++) {
-            for (int w=0; w<32; w++) {
-                input_data[idx++] = float_img.at<cv::Vec3f>(h,w)[c];
+        // 1. 转换为灰度图
+        cv::cvtColor(rotated_frame, gray, cv::COLOR_BGR2GRAY);
+        
+        // 2. 高斯模糊去噪
+        cv::GaussianBlur(gray, blurred, cv::Size(5, 5), 0);
+        
+        // 3. 自适应阈值二值化（调整参数）
+        cv::adaptiveThreshold(blurred, binary, 255,
+                              cv::ADAPTIVE_THRESH_GAUSSIAN_C,
+                              cv::THRESH_BINARY, 15, 8);
+        
+        // 4. 形态学闭运算 - 填充字符内部空洞
+        cv::Mat kernel_close = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+        cv::morphologyEx(binary, morph_closed, cv::MORPH_CLOSE, kernel_close, cv::Point(-1,-1), 2);
+        
+        // 5. 形态学开运算 - 去除小噪声点
+        cv::Mat kernel_open = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2, 2));
+        cv::morphologyEx(morph_closed, morph_opened, cv::MORPH_OPEN, kernel_open, cv::Point(-1,-1), 1);
+        
+        // 6. 可选：对比度增强（如果光照条件差）
+        // cv::equalizeHist(morph_opened, morph_opened);
+        
+        // ========== Tesseract OCR 识别 ==========
+        static tesseract::TessBaseAPI* api = nullptr;
+        static bool init_ok = false;
+        
+        if (!api) {
+            api = new tesseract::TessBaseAPI();
+            if (api->Init(NULL, "eng") != 0) {
+                ROS_ERROR("Tesseract initialization failed. Make sure 'tesseract-ocr-eng' is installed.");
+                delete api;
+                api = nullptr;
+                init_ok = false;
+                return;
             }
-        }
-    }
-
-    try {
-        static Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "CIFAR100");
-        static Ort::SessionOptions sess_opt;
-        static Ort::Session sess(env, ONNX_MODEL_PATH.c_str(), sess_opt);
-        
-        // 适配GPU/CPU
-        if (USE_GPU) {
-            sess_opt.AppendExecutionProvider_CUDA(OrtCUDAProviderOptions{});
-            ROS_INFO("[preciseClassify] 使用GPU推理 | ONNX模型路径：%s", ONNX_MODEL_PATH.c_str());
-        } else {
-            ROS_INFO("[preciseClassify] 使用CPU推理 | ONNX模型路径：%s", ONNX_MODEL_PATH.c_str());
+            // 设置为单字符识别模式
+            api->SetPageSegMode(tesseract::PSM_SINGLE_CHAR);
+            api->SetVariable("tessedit_char_whitelist", "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+            init_ok = true;
         }
         
-        // 获取输入输出名
-        auto in_name_allocated = sess.GetInputNameAllocated(0, Ort::AllocatorWithDefaultOptions());
-        auto out_name_allocated = sess.GetOutputNameAllocated(0, Ort::AllocatorWithDefaultOptions());
-        const char* in_name = in_name_allocated.get();
-        const char* out_name = out_name_allocated.get();
-        ROS_DEBUG("[preciseClassify] ONNX输入名：%s | 输出名：%s", in_name, out_name);
+        if (!init_ok) {
+            ROS_ERROR("Tesseract not available, skipping OCR.");
+            return;
+        }
         
-        std::vector<int64_t> shape = {1,3,32,32};
-        auto tensor = Ort::Value::CreateTensor<float>(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeCPU),
-            input_data.data(), input_data.size(), shape.data(), shape.size());
+        // 设置处理后的图像
+        api->SetImage((uchar*)morph_opened.data, morph_opened.cols, morph_opened.rows, 1, morph_opened.cols);
         
-        auto outputs = sess.Run({}, &in_name, &tensor, 1, &out_name, 1);
+        // ========== 置信度过滤 + 取最佳字符 ==========
+        char* outText = api->GetUTF8Text();
         
-        float* out_data = outputs[0].GetTensorMutableData<float>();
-        int top_idx = std::max_element(out_data, out_data+CIFAR100_CLASSES.size()) - out_data;
-        conf = out_data[top_idx];
-        cls_name = CIFAR100_CLASSES[top_idx];
+        // 获取置信度信息
+        int confidence = api->MeanTextConf();
         
-        ROS_INFO("[preciseClassify] 分类完成 | 最高置信度类别：%s | 置信度：%f | 索引：%d",
-                 cls_name.c_str(), conf, top_idx);
-        return conf >= CONF_THRESHOLD;
-    } catch (const std::exception& e) {
-        ROS_ERROR("[preciseClassify] ONNX推理异常：%s", e.what());
-        return false;
-    } catch (...) {
-        ROS_ERROR("[preciseClassify] ONNX推理未知异常");
-        return false;
-    }
-}
-
-// -------------------------- 核心检测函数（集成分类） --------------------------
-UavDetectResult detectUavTarget() {
-    UavDetectResult result;
-    if (current_frame.empty()) return result;
-
-    // 步骤1：找灰色圆环
-    cv::Point gray_center;
-    cv::Rect gray_rect;
-    int gray_radius = 0;
-    if (!findGrayRingCenter(current_frame, gray_center, gray_rect, gray_radius)) {
-        return result;
-    }
-
-    // 步骤2：找黑色正方形
-    cv::Rect black_square;
-    float square_angle = 0.0f;
-    int search_radius = static_cast<int>(gray_radius * SEARCH_RADIUS_SCALE);
-    if (!findBlackSquareAroundCenter(current_frame, gray_center, search_radius, black_square, square_angle)) {
-        return result;
-    }
-
-    // 步骤3：定位中心图片
-    cv::Rect inner_img_rect;
-    if (!findInnerImageRect(current_frame, gray_center, black_square, inner_img_rect)) {
-        return result;
-    }
-
-    // 步骤4：调用ONNX分类函数
-    std::string cls_name;
-    float conf = 0.0f;
-    if (preciseClassify(current_frame, inner_img_rect, cls_name, conf)) {
-        result.class_name = cls_name;
-        result.confidence = conf;
-    }
-
-    // 填充结果
-    result.is_detected = true;
-    result.gray_ring_center = gray_center;
-    result.black_square = black_square;
-    result.square_angle = square_angle;
-    result.inner_image_rect = inner_img_rect;
-
-    return result;
-}
-
-
-/**
- * @brief 极简二维码识别+信息提取（格式确定，无冗余校验）
- * @param frame 输入图像（BGR格式）
- * @return bool 是否成功识别二维码
- * @note 二维码内容格式：英文逗号分隔的类别列表（如 "apple,man,left"）
- */
-bool detectQRCodeAndExtractInfo() {
-    ROS_INFO("[detectQRCodeAndExtractInfo] 开始二维码识别");
-    // 1. 初始化检测器+解码二维码
-    cv::Mat &frame = current_frame;
-    std::string qr_text = decodeQRCode(frame);
-    if (qr_text.empty()) {
-        ROS_WARN("[detectQRCodeAndExtractInfo] 二维码解码失败 | 解码结果为空");
-        H_direction = 0;          // 未识别到，重置方向
-        g_qrcode_classes.clear(); // 清空类别
-        return false;
-    }
-    ROS_INFO("[detectQRCodeAndExtractInfo] 二维码解码成功 | 原始文本：%s", qr_text.c_str());
-
-    // 2. 直接分割qr_text，提取前两个+最后一个单词（核心简化逻辑）
-    g_qrcode_classes.clear();
-    H_direction = 0;
-    int comma_count = 0;          // 记录逗号数量，定位前两个/最后一个单词
-    std::string temp;             // 临时存储单个单词
-    ROS_DEBUG("[detectQRCodeAndExtractInfo] 开始解析二维码文本 | 文本长度：%lu", qr_text.length());
-    
-    for (char c : qr_text) {
-        if (c == ',') {
-            // 遇到逗号：先把当前temp存入列表（仅前两个）
-            if (comma_count < 2 && !temp.empty()) {
-                g_qrcode_classes.push_back(temp);
-                ROS_DEBUG("[detectQRCodeAndExtractInfo] 提取第%d个类别：%s", comma_count+1, temp.c_str());
+        if (outText && confidence > 10) {  // 置信度阈值设为30
+            std::string result = outText;
+            
+            // 去除空格、换行等空白字符
+            result.erase(std::remove_if(result.begin(), result.end(), ::isspace), result.end());
+            
+            if (result.length() > 0) {
+                // 方案1：如果识别出多个字符，取置信度最高的单个字符
+                if (result.length() > 1) {
+                    ROS_WARN("识别出多个字符: %s (长度: %d), 平均置信度: %d", 
+                             result.c_str(), result.length(), confidence);
+                    
+                    // 使用结果迭代器获取每个字符的置信度
+                    tesseract::ResultIterator* it = api->GetIterator();
+                    if (it) {
+                        int best_conf = 0;
+                        char best_char = 0;
+                        
+                        do {
+                            const char* symbol = it->GetUTF8Text(tesseract::RIL_SYMBOL);
+                            int conf = it->Confidence(tesseract::RIL_SYMBOL);
+                            
+                            if (symbol && symbol[0] != '\0' && conf > best_conf) {
+                                best_conf = conf;
+                                best_char = symbol[0];
+                                ROS_INFO("字符 '%c' 置信度: %d", best_char, best_conf);
+                            }
+                            if (symbol) delete[] symbol;
+                        } while (it->Next(tesseract::RIL_SYMBOL));
+                        
+                        delete it;
+                        
+                        // 使用置信度最高的字符
+                        if (best_char != 0 && best_conf > 30) {
+                            num_or_letter = std::string(1, best_char);
+                            num_or_letter_detected = true;
+                            detected = true;
+                            ROS_INFO("最终识别结果: %s (置信度: %d)", num_or_letter.c_str(), best_conf);
+                        }
+                    }
+                }
+                else {
+                    // 只有一个字符，直接使用
+                    num_or_letter = result.substr(0, 1);
+                    num_or_letter_detected = true;
+                    detected = true;
+                    ROS_INFO("识别结果: %s (置信度: %d)", num_or_letter.c_str(), confidence);
+                }
             }
-            temp.clear();
-            comma_count++;
-        } else {
-            // 非逗号：拼接字符成单词（自动过滤空格）
-            if (c != ' ') temp += c; // 可选：过滤空格，兼容"man, apple ,left"格式
+            delete[] outText;
         }
-    }
-
-    // 3. 处理最后一个单词（循环结束后temp就是最后一个）
-    if (!temp.empty()) {
-        ROS_DEBUG("[detectQRCodeAndExtractInfo] 提取方向信息：%s", temp.c_str());
-        if (temp == "left") {
-            H_direction = 1;
-            ROS_INFO("[detectQRCodeAndExtractInfo] 识别到左方向 | H_direction = 1");
-        } else if (temp == "right") {
-            H_direction = -1;
-            ROS_INFO("[detectQRCodeAndExtractInfo] 识别到右方向 | H_direction = -1");
-        } else {
-            ROS_WARN("[detectQRCodeAndExtractInfo] 方向信息无效 | 内容：%s", temp.c_str());
+        else {
+            ROS_WARN("OCR识别置信度过低: %d 或无结果", confidence);
         }
-    } else {
-        ROS_WARN("[detectQRCodeAndExtractInfo] 未提取到方向信息 | 最后一个单词为空");
+        
+        // 注意：不调用 api->End() 或 delete api，保留对象以供下次使用
     }
-
-    ROS_INFO("[detectQRCodeAndExtractInfo] 二维码解析完成 | 原始文本：%s | 解析出%d个目标类别",
-             qr_text.c_str(), (int)g_qrcode_classes.size());
-
-    // 第二步：逐条输出每个元素（带索引，便于定位）
-    if (g_qrcode_classes.empty())
-    {
-        ROS_WARN("[detectQRCodeAndExtractInfo] 解析结果为空（无有效目标类别）");
-    }
-    else
-    {
-        for (size_t i = 0; i < g_qrcode_classes.size(); ++i)
-        {
-            ROS_INFO("[detectQRCodeAndExtractInfo] 第%d个目标类别：%s", (int)(i + 1), g_qrcode_classes[i].c_str());
-        }
-    }
-    return true;
 }
 
-std::string decodeQRCode(const cv::Mat& frame) {
-    ROS_INFO("[decodeQRCode] 开始QR码解码 | 输入图像尺寸：%dx%d | 通道数：%d",
-             frame.cols, frame.rows, frame.channels());
-    // 步骤1：转灰度图（quirc 只处理灰度图）
+
+
+//用于任务四，识别投放标识
+void detect_circular(const cv::Mat &frame){
     cv::Mat gray;
-    if (frame.channels() == 3) {
-        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
-        ROS_DEBUG("[decodeQRCode] 转换为灰度图完成");
-    } else {
-        gray = frame.clone();
-        ROS_DEBUG("[decodeQRCode] 输入已为灰度图，直接克隆");
-    }
+    cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+     cv::GaussianBlur(gray, gray, cv::Size(5, 5), 0);
+     cv::Mat binary;
+    cv::adaptiveThreshold(gray, binary, 255, 
+                          cv::ADAPTIVE_THRESH_GAUSSIAN_C, 
+                          cv::THRESH_BINARY, 11, 2);
+    vector<vector<cv::Point>> contours;
+     cv::findContours(binary, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+    cv::Point2f center(-1, -1);
+    double maxCircularity = 0.8; // 圆形度阈值，越接近1越圆
+    double maxArea = 0;           // 最大面积
 
-    // 步骤2：初始化 quirc 上下文
-    struct quirc* q = quirc_new();
-    if (!q) {
-        ROS_ERROR("[decodeQRCode] quirc上下文初始化失败");
-        return "";
-    }
-    ROS_DEBUG("[decodeQRCode] quirc上下文初始化成功");
-
-    // 步骤3：设置图像尺寸
-    if (quirc_resize(q, gray.cols, gray.rows) < 0) {
-        ROS_ERROR("[decodeQRCode] quirc设置图像尺寸失败 | 目标尺寸：%dx%d", gray.cols, gray.rows);
-        quirc_destroy(q);
-        return "";
-    }
-    ROS_DEBUG("[decodeQRCode] quirc设置图像尺寸成功 | %dx%d", gray.cols, gray.rows);
-
-    // 步骤4：把 OpenCV 图像数据拷贝到 quirc 缓冲区
-    uint8_t* buf = quirc_begin(q, nullptr, nullptr);
-    if (!buf) {
-        ROS_ERROR("[decodeQRCode] 获取quirc缓冲区失败");
-        quirc_destroy(q);
-        return "";
-    }
-    for (int y = 0; y < gray.rows; y++) {
-        memcpy(buf + y * gray.cols, gray.ptr(y), gray.cols);
-    }
-    quirc_end(q);
-    ROS_DEBUG("[decodeQRCode] 图像数据拷贝到quirc缓冲区完成");
-
-    // 步骤5：检测并解码 QR 码
-    int num_codes = quirc_count(q);
-    ROS_INFO("[decodeQRCode] QR码检测完成 | 检测到QR码数量：%d", num_codes);
-    if (num_codes == 0) {
-        quirc_destroy(q);
-        return "";
-    }
-
-    struct quirc_code code;
-    struct quirc_data data;
-    quirc_extract(q, 0, &code); // 提取第一个 QR 码
-    ROS_DEBUG("[decodeQRCode] 提取第一个QR码完成");
+    for (const auto& contour : contours) {
+        // 计算轮廓的面积和周长
+        double area = cv::contourArea(contour);
+        double perimeter = cv::arcLength(contour, true);
     
-    int decode_ret = quirc_decode(&code, &data);
-    if (decode_ret != 0) { // 解码
-        ROS_ERROR("[decodeQRCode] QR码解码失败 | 错误码：%d", decode_ret);
-        quirc_destroy(q);
-        return "";
-    }
-    ROS_DEBUG("[decodeQRCode] QR码解码成功 | 数据长度：%d", data.payload_len);
+        if (area < 10000) continue;
+        
+        // 计算圆度：4 * π * area / (perimeter^2)
+        double circularity = 4 * M_PI * area / (perimeter * perimeter);
+        
+        // 筛选圆形轮廓（取最圆且面积最大的）
+        if (circularity > maxCircularity && area > maxArea) {
 
-    // 步骤6：释放资源 + 返回结果
-    std::string result((const char*)data.payload, data.payload_len);
-    quirc_destroy(q);
-    ROS_INFO("[decodeQRCode] QR码解码完成 | 解码结果：%s", result.c_str());
-    return result;
+            cv::Point2f circle_center;
+            float radius;
+            cv::minEnclosingCircle(contour, circle_center, radius);//求最小外接圆的函数，来获得中心坐标
+            center = circle_center;circular_found=true;
+            maxArea = area;
+        }
+    }
+    if(circular_found)circular_center=center;
 }
 
+//用于任务四，巡航同时识别投放标识
+bool cruise_finding_circular(float center_x,float center_y,float z,float target_yaw,float error_max,float a){
+
+            if(detect_count_circular<4){detect_count_circular++;}
+            else{detect_circular(current_frame);detect_count_circular=0;}
+
+    if(!center_detected_circular&&!mission_pos_cruise(center_x,center_y,z,target_yaw,error_max)){
+        center_detected_circular=true;return false;
+    }
+       else if(angle_cruise_circular<d_angle_circular*5.5&&!mission_pos_cruise(center_x+a*cos(angle_cruise),center_y+a*sin(angle_cruise),z,target_yaw,error_max)){
+                 angle_cruise_circular+= d_angle_circular;return false;
+        }
+    
+        else{return true;}
+    
+}
+
+
+//用于任务五，当任务二识别出字母或数字时在任务五识别对应的数字或字母
+bool detect_specific_char(const cv::Mat &frame ,const string& target_char,cv::Point2f &center){
+    static tesseract::TessBaseAPI* api = nullptr;
+    static bool init_ok = false;
+    if (!api) {
+        api = new tesseract::TessBaseAPI();
+        if (api->Init(NULL, "eng") != 0) {
+            ROS_ERROR("Tesseract initialization failed.");
+            delete api;
+            api = nullptr;
+            init_ok = false;
+            return false;
+        }
+        // 设置页面分割模式为自动（可根据需要调整）
+        api->SetPageSegMode(tesseract::PSM_AUTO);
+        init_ok = true;
+    }
+    if (!init_ok) {
+        ROS_ERROR("Tesseract not available.");
+        return false;
+    }
+    cv::Mat gray, processed;
+    cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+    cv::GaussianBlur(gray, processed, cv::Size(3, 3), 0);
+    cv::adaptiveThreshold(processed, processed, 255,cv::ADAPTIVE_THRESH_GAUSSIAN_C,cv::THRESH_BINARY_INV, 11, 2);
+     // 设置字符白名单（只允许目标字符）
+    api->SetVariable("tessedit_char_whitelist", target_char.c_str());
+     api->SetImage(processed.data, processed.cols, processed.rows, 1, processed.cols);
+     // 执行识别
+    char* outText = api->GetUTF8Text();  // 文本结果（仅用于调试，可不使用）
+    bool found = false;
+    // 获取结果迭代器，遍历每个识别到的符号（字符级别）
+    tesseract::ResultIterator* it = api->GetIterator();
+    if (it) {
+        do {
+            const char* symbol = it->GetUTF8Text(tesseract::RIL_SYMBOL);
+            if (symbol && symbol[0] == target_char[0]) { // 确保识别出的字符与目标匹配
+                int x1, y1, x2, y2;
+                it->BoundingBox(tesseract::RIL_SYMBOL, &x1, &y1, &x2, &y2);
+                center.x = (x1 + x2) / 2.0f;
+                center.y = (y1 + y2) / 2.0f;
+                found = true;
+                delete[] symbol;
+                break;  // 只取第一个匹配的字符，可根据需要改为收集所有
+            }
+            delete[] symbol;
+        } while (it->Next(tesseract::RIL_SYMBOL));
+        delete it;
+    }
+    delete[] outText;
+    api->Clear();  // 清除图像数据，准备下一次使用
+    return found;
+}
+
+//用于任务五，当任务二识别出二维码时在任务五识别二维码
+bool detect_QR(const cv::Mat &frame,cv::Point2f &center){
+        cv::QRCodeDetector qrDecoder;
+    std::vector<cv::Point2f> corners;
+    bool q_detected = qrDecoder.detect(frame, corners);
+    if (q_detected && corners.size() >= 4)
+	{
+		// 计算四个角点的中心
+		for (int i = 0; i < 4; i++)
+		{
+			center.x += corners[i].x;
+			center.y += corners[i].y;
+		}
+		center.x = center.x / 4.0;
+		center.y = center.y / 4.0;
+		ROS_INFO("find QR center in camera: (%.1f, %.1f)", center.x, center.y);
+        return true;
+	}
+    else{return false;}
+}
+
+
+//用于任务五，用目标中心与相机光轴的水平像素偏差计算移动速度，直到目标中心与光轴几乎水平重合
+bool move_to_target(const cv::Mat &frame,float target_yaw){
+    cv::Point2f center;
+    float u=333.636;
+    float v=0;
+    if(QR_detected){
+     if(detect_QR(frame,center)){
+          ROS_INFO("检测到二维码");
+        float dis=center.x-u;//当dis>0,图像中心偏右，无人机要右移
+        if(fabs(dis)<=20){return true;}
+        v=dis*0.005;
+     }
+     else{
+        ROS_WARN("未检测到二维码");return false;
+     }
+    }
+    else{
+        if(detect_specific_char(frame,num_or_letter,center)){
+             ROS_INFO("检测到%s",num_or_letter.c_str());
+            float dis=center.x-u;
+        if(fabs(dis)<=20){return true;}
+        v=dis*0.005;
+        }
+        else{
+        ROS_WARN("未检测到%s",num_or_letter.c_str());return false;
+        }
+    }
+
+       setpoint_raw.type_mask = 1 + 2 + 4 /*+ 8 + 16 + 32*/ + 64 + 128 + 256 + 512 /*+ 1024 + 2048*/;
+		setpoint_raw.coordinate_frame = 1;
+		setpoint_raw.position.x = local_pos.pose.pose.position.x;
+		setpoint_raw.position.y = local_pos.pose.pose.position.y;
+		setpoint_raw.position.z = local_pos.pose.pose.position.z;
+
+		// 速度字段（原有逻辑保留，已补全）
+		setpoint_raw.velocity.x = 0.0f;
+		setpoint_raw.velocity.y = v;
+		setpoint_raw.velocity.z = 0.0f; // 保持高度
+
+		// 必选：补全加速度字段（飞控要求，设为0即可）
+		setpoint_raw.acceleration_or_force.x = 0.0f;
+		setpoint_raw.acceleration_or_force.y = 0.0f;
+		setpoint_raw.acceleration_or_force.z = 0.0f;
+
+		// 必选：补全姿态字段（飞控要求，用当前yaw）
+        setpoint_raw.yaw = target_yaw / 180.0 * M_PI;	  
+		setpoint_raw.yaw_rate = 0.0f; // 偏航角速度（保持当前朝向）
+        return false;
+}

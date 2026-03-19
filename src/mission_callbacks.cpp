@@ -157,3 +157,19 @@ void image_cb(const sensor_msgs::ImageConstPtr &msg)
     current_frame = cv_ptr->image;
     got_image = true;
 }
+
+void front_image_cb(const sensor_msgs::ImageConstPtr &msg)
+{
+    cv_bridge::CvImagePtr cv_ptr;
+    try
+    {
+        cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+    }
+    catch (cv_bridge::Exception &e)
+    {
+        ROS_ERROR("cv_bridge exception (front camera): %s", e.what());
+        return;
+    }
+    front_frame = cv_ptr->image;
+    got_front_image = true;
+}

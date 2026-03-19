@@ -6,16 +6,11 @@
 /************************************************************************
 视觉相关函数声明
 *************************************************************************/
-cv::Mat getColorMask(const cv::Mat& frame, const cv::Scalar& low, const cv::Scalar& high);
-bool findGrayRingCenter(const cv::Mat& frame, cv::Point& center, cv::Rect& gray_rect, int& radius) ;
-
-bool findBlackSquareAroundCenter(const cv::Mat& frame, const cv::Point& gray_center, int search_radius,
-                                cv::Rect& black_square, float& angle) ;
-bool preciseClassify(const cv::Mat& frame, const cv::Rect& center_rect, 
-                     std::string& cls_name, float& conf);
-bool detectQRCodeAndExtractInfo();
-UavDetectResult detectUavTarget();
-bool onFrame(float t_yaw,double err_max);
-std::string decodeQRCode(const cv::Mat& frame);
+void detect_QR_num_letter(const cv::Mat &frame);
+void detect_circular(const cv::Mat &frame);
+bool cruise_finding_circular(float center_x,float center_y,float z,float target_yaw,float error_max,float a);
+bool detect_specific_char(const cv::Mat &frame ,const string& target_char,cv::Point2f &center);
+bool detect_QR(const cv::Mat &frame,cv::Point2f &center);
+bool move_to_target(const cv::Mat &frame,float target_yaw);
 
 #endif
