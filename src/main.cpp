@@ -214,7 +214,11 @@ int main(int argc, char **argv)
                 mission_num = 4; // 理论上完全可以Delay(0);
             }
             break;
-        case 4: //准备转圈
+        /* 
+
+            //此处保留了原来的逻辑，需要对比时方便修改。
+
+        case 4: // 准备转圈
             if (collision_avoidance_mission(3.7, 0.6, ALTITUDE, 0, err_max))
             {
                 Delay(0.5);
@@ -222,8 +226,34 @@ int main(int argc, char **argv)
             break;
 
         case 5:
-            if (Circle_around(COUNTS,TIMES,err_max))
+            if (Circle_around(COUNTS, TIMES, err_max))
             {
+                Delay(DELAY);
+            }
+            break;
+        */
+        case 4: //准备转圈
+            if (collision_avoidance_mission(3.7, 0.6, ALTITUDE, LEFT, err_max))
+            {
+                Delay(0.5);
+            }
+            break;
+
+        case 5:
+            if (Circle_around(3,60.0f,ALTITUDE,0.75,0.75,4.3,0, 0.8, 0.3))
+                            /* int counts, float times, float z_h, float v0, float v1, float cx, float cy, float r_of_c, float err_max   */
+                            /*设定的总圈数，设定的总时间，  设定高度 ，切向速度 ，纠正速度，圆心x坐标，圆心y坐标，  圆半径，    误差*/
+                            /*
+                            函数使用事项：
+                            1.切向速度指无人机绕圆周转动速度。
+                            2.纠正速度指无人机偏离圆周时将其拉回轨道的速度（理论上并不等于这个值，因为偏离圆周越远，这个速度就越大，但这个设定值能决定偏离速度随位置偏移的变化率
+                            3.建议纠正速度 >= 切向速度
+                            4.如果增大切向速度v，也应适度增大r_of_c
+                            5.误差建议在0.3-0.5，但切记要保证误差不能大于 r_of_c,而且二者也不要太接近，这个误差最好不要设置太小，因为他不会影响飞行，单纯起到计数作用。
+                            6.理论上一圈飞行时间为2PI*r/v, a = v^2/r,得到t = 2PI*v/a, 要保证时间尽量短而加速度尽量小（更稳定）的情况下，应同步减小v和r，即半径越小，速度适当减小，转的越快
+                                当然，实际飞行考虑更多的因素，应结合实际条件多修改参数进行调整。
+                            */
+            {               
                 Delay(DELAY);
             }
             break;
