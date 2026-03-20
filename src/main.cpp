@@ -14,9 +14,10 @@ float if_debug = 0;
 float err_max = 0.2;
 bool delay = false;
 ros::Time last_request;
-
+float height_for_cast=0.7;
 geometry_msgs::Point circular_center_world;
-
+float aim_x[3]={2.2,3.0,3.9};
+int idx=-1;
 void print_param()
 {
     std::cout << "=== 控制参数 ===" << std::endl;
@@ -49,6 +50,7 @@ void Delay(float delay_time)
         delay = true;
     }
 }
+
 
 int main(int argc, char **argv)
 {
@@ -92,7 +94,7 @@ int main(int argc, char **argv)
     nh.param<double>("min_range", min_range, 0.1);
     nh.param<double>("max_range", max_range, 30.0);
     nh.param<int>("num_bins", num_bins, 360);
-    nh.param<std::string>("target_color", target_color, "blue");
+  
 
     nh.param<float>("map_cellsize", map_cellsize, 0.15);
     nh.param<float>("map_width", map_width, 10.0);
@@ -214,7 +216,7 @@ int main(int argc, char **argv)
 
          case 3://先转向
             if (mission_pos_cruise(3.8,0,ALTITUDE,LEFT,err_max))
-            {
+            {  
                 Delay(DELAY);
             }
             break;
@@ -222,9 +224,12 @@ int main(int argc, char **argv)
 
         case 4://任务二，巡航识别
             if(detected){
+                ROS_INFO("完成le识别");
+                if(QR_detected){ROS_WARN("检测到二维码！");}
+                else{ROS_WARN("检测到数字或字母:%s",num_or_letter.c_str());}
                 Delay(DELAY);
             }
-            if( cruise_finding(3.8, 0, ALTITUDE,LEFT, err_max,0.6)){
+            else if( cruise_finding(3.8, 0, ALTITUDE,LEFT, err_max,0.6)){
                 ROS_INFO("完成le巡航");
                  Delay(DELAY);
             }
@@ -233,13 +238,9 @@ int main(int argc, char **argv)
      
   
         case 5://任务三，避障到投放区
-          if(detected){
-                if(QR_detected){ROS_WARN("检测到二维码！");}
-                else{ROS_WARN("检测到数字或字母:%s",num_or_letter.c_str());}
-            }
-            else{ROS_WARN("NOT detected anything");}
+         
              if (collision_avoidance_mission(3.42, 3.07, ALTITUDE, LEFT, err_max))
-            {
+            {   
                 Delay(DELAY);
             }
             if(ERROR_DET){
@@ -250,10 +251,12 @@ int main(int argc, char **argv)
 
         case 6://任务四，巡航并识别投放区
            if(circular_found){
-            ROS_INFO("找到投放点");
-            Delay(DELAY);
+            circular_center_world=change_to_world(circular_center.x,circular_center.y);
+             ROS_INFO("投放点世界坐标: x:%.2f,y:%.2f",circular_center_world.x,circular_center_world.y);
+            ROS_INFO("找到le投放点");
+            mission_num=7;
            }
-           if(cruise_finding_circular(3.42, 3.2, ALTITUDE, LEFT, err_max, 0.9)){
+           else if(cruise_finding_circular(3.42, 3.2, ALTITUDE, LEFT, err_max, 0.5)){
                 ROS_INFO("完成le巡航");
                  Delay(DELAY);
            }
@@ -261,10 +264,10 @@ int main(int argc, char **argv)
  
         case 7://任务四，识别成功就投放，投放逻辑待添加
             if(circular_found){
-                circular_center_world=change_to_world(circular_center.x,circular_center.y);
-                 ROS_INFO("前往投放点,投放点世界坐标: x:%2f,y:%.2f",circular_center_world.x,circular_center_world.y);
-               if (mission_pos_cruise(circular_center_world.x,circular_center_world.y,ALTITUDE,LEFT,err_max))
-            {   ROS_INFO("到达投放点,投放点世界坐标: x:%2f,y:%.2f",circular_center_world.x,circular_center_world.y);
+               
+                 ROS_INFO("前往投放点,投放点世界坐标: x:%.2f,y:%.2f",circular_center_world.x,circular_center_world.y);
+               if (mission_pos_cruise(circular_center_world.x,circular_center_world.y,height_for_cast,LEFT,err_max))
+            {   ROS_INFO("到达投放点,投放点世界坐标: x:%.2f,y:%.2f",circular_center_world.x,circular_center_world.y);
                 /*添加投放代码*/
                 ROS_WARN("投放。。。");
                 Delay(DELAY);
@@ -284,8 +287,8 @@ int main(int argc, char **argv)
             break;
         
         case 9://任务五，朝识别目标移动一点，防止识别时碰到障碍物
-            if (collision_avoidance_mission(2.72, 3.07, ALTITUDE, BACK, err_max))
-            {
+            if (mission_pos_cruise(1.9, 3.07, ALTITUDE, BACK, err_max))
+            {   if(detect_aim(front_frame,idx)){ROS_INFO("找到le目标,idx:%d",idx);};
                 Delay(DELAY);
             }
             if(ERROR_DET){
@@ -295,14 +298,14 @@ int main(int argc, char **argv)
             break;
         
         case 10://任务五，识别目标并移动，发射激光逻辑待添加
-            if(move_to_target(front_frame,BACK)){
-                
-                ROS_WARN("识别了目标并移动到目标前");
+            if(mission_pos_cruise(2.0,aim_x[idx],ALTITUDE,BACK,err_max)){
+
+                ROS_WARN("移动到目标前");
                 ROS_WARN("发射激光  ");
                 /*添加发射激光逻辑*/
                 Delay(DELAY);
             }
-        
+            break;
         case 11://从这之后是返回起飞点逻辑
             if (mission_pos_cruise(local_pos.pose.pose.position.x,local_pos.pose.pose.position.y, ALTITUDE,0, err_max))
             {

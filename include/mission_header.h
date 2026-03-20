@@ -49,6 +49,15 @@ using namespace std;
 #define EXPAND_TWO 24
 #define FLOAT_MAX std::numeric_limits<float>::max()
 
+
+// 颜色范围定义（HSV）
+struct ColorRange
+{
+    cv::Scalar lower;
+    cv::Scalar upper;
+    std::string name;
+};
+
 /************************************************************************
 全局变量声明
 *************************************************************************/
@@ -105,9 +114,10 @@ extern cv::Mat camera_matrix;
 extern std::vector<ColorRange> color_ranges;
 extern bool QR_detected;//判断是否检测到QR
 extern string num_or_letter;
-extern bool num_or_letter_detected=false;
+extern bool num_or_letter_detected;
 extern bool detected;
 extern int aim_num;
+extern int aim_num_circular;
 extern int detect_count;//每5帧检测一次
 extern float angle_cruise;
 extern float d_angle;
@@ -196,13 +206,7 @@ public:
     }
 };
 
-// 颜色范围定义（HSV）
-struct ColorRange
-{
-    cv::Scalar lower;
-    cv::Scalar upper;
-    std::string name;
-};
+
 
 /************************************************************************
 类定义

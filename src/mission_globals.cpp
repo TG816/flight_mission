@@ -61,11 +61,16 @@ bool center_detected=false;
 
     cv::Point2f circular_center;
     bool circular_found=false;
-
+ int aim_num_circular=0;
 bool center_detected_circular=false;
 int detect_count_circular=0;//每5帧检测一次
 float angle_cruise_circular=0;
 float d_angle_circular=M_PI/3.0;
+
+
+
+
+
 
     std::vector<ColorRange> color_ranges = {
         // 红色（有两个范围）

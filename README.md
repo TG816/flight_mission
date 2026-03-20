@@ -1,6 +1,4 @@
-xml
-cmake
-launch
-yaml
-shell
-以上均未更新至raicom版，需要自行修改
+基本更新至raicom版
+相机内参需修改
+投放、发射激光待添加
+返回起飞点还需改善（改一下点和朝向）

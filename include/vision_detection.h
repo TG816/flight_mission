@@ -12,5 +12,6 @@ bool cruise_finding_circular(float center_x,float center_y,float z,float target_
 bool detect_specific_char(const cv::Mat &frame ,const string& target_char,cv::Point2f &center);
 bool detect_QR(const cv::Mat &frame,cv::Point2f &center);
 bool move_to_target(const cv::Mat &frame,float target_yaw);
-
+bool cruise_finding(float a, float b, float c, float d, float e, float f);
+bool detect_aim(const cv::Mat &frame,int& idx);
 #endif

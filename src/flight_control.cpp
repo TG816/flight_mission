@@ -24,6 +24,7 @@ bool mission_pos_cruise(float x, float y, float z, float target_yaw, float error
     setpoint_raw.position.z = z + init_position_z_take_off;
     setpoint_raw.yaw = target_yaw / 180.0 * M_PI;
     ROS_INFO("now (%.2f,%.2f,%.2f,%.2f) to ( %.2f, %.2f, %.2f, %.2f)", local_pos.pose.pose.position.x, local_pos.pose.pose.position.y, local_pos.pose.pose.position.z, yaw * 180.0 / M_PI, x + init_position_x_take_off, y + init_position_y_take_off, z + init_position_z_take_off, target_yaw);
+  
     if (fabs(local_pos.pose.pose.position.x - x - init_position_x_take_off) < error_max && fabs(local_pos.pose.pose.position.y - y - init_position_y_take_off) < error_max && fabs(local_pos.pose.pose.position.z - z - init_position_z_take_off) < 0.05 && fabs(yaw - target_yaw / 180 * M_PI) < 0.1)
     {
         ROS_INFO("到达目标点，巡航点任务完成");
@@ -105,19 +106,5 @@ bool move_in_drone_coordinate(double x, double y, double z, double target_yaw, d
 //     setpoint_raw.yaw_rate = 0.0f; // 偏航角速度（保持当前朝向）
 // }
 
-//用于任务二，绕半径为a的粗略圆形飞行一周，同时找目标
-bool cruise_finding(float center_x,float center_y,float z,float target_yaw,float error_max,float a){
 
-    if(detect_count<4){detect_count++;}
-    else{detect_QR_num_letter(current_frame);detect_count=0;}
-    if(!center_detected&&!mission_pos_cruise(center_x,center_y,z,target_yaw,error_max)){
-     center_detected=true; return false;
-    }
 
-    else if(angle_cruise<d_angle*5.5&&!mission_pos_cruise(center_x+a*cos(angle_cruise),center_y+a*sin(angle_cruise),z,target_yaw,error_max)){
-           ROS_WARN("到达目标点%d",aim_num);aim_num++;     
-        angle_cruise+=d_angle;return false;
-    }
-    
-    else{return true;}//检查完所有待检测点
-}
