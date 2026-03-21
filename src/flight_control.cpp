@@ -296,32 +296,9 @@ bool Circle_around(int counts, float times, float z_h, float v0, float v1, float
     return true;
 }
 
-void throwObject(Point obj,float t_yaw,double err_max){
-    //下降高度
-    ros::Time down = ros::Time::now();
-    while(ros::ok()){
-        // if(mission_pos_cruise(obj.x,obj.y,LOW_ALTITUDE,t_yaw,err_max)){
-        //     break;
-        // }else{
-        //     if(ros::Time::now() - down >= ros::Duration(3.0)) break;
-        // }
-        if(ros::Time::now() - down >= ros::Duration(1.0)) break;
-        ROS_INFO("降高度");
-        ros::Duration(0.1).sleep();
-    }
+bool throwObject(){
     //投掷
     ROS_INFO("开始投掷，投掷位置：%f %f",local_pos.pose.pose.position.x,local_pos.pose.pose.position.y);
     //暂时空着具体动作
-    //上升高度
-    ros::Time up = ros::Time::now();
-    while(ros::ok()){
-        // if(mission_pos_cruise(obj.x,obj.y,ALTITUDE,t_yaw,err_max)){
-        //     break;
-        // }else{
-        //     if(ros::Time::now() - up >= ros::Duration(1.0)) break;
-        // }
-        if(ros::Time::now() - up >= ros::Duration(1.0)) break;
-        ROS_INFO("升高度");
-        ros::Duration(0.1).sleep();
-    }
+    return true;
 }

@@ -12,5 +12,5 @@ bool move_in_drone_coordinate(double x, double y, double z, double target_yaw, d
 void fly(float v);
 bool Circle_around(int counts, float times, double err_max);
 bool Circle_around(int counts, float times, float z_h, float v0, float v1, float cx, float cy, float r_of_c, float err_max);
-void throwObject(Point obj, float t_yaw, double err_max);
+bool throwObject();
 #endif

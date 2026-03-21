@@ -14,6 +14,9 @@ float init_position_y_take_off = 0;
 float init_position_z_take_off = 0;
 float init_yaw_take_off = 0;
 bool flag_init_position = false;
+bool isThrow = false;
+Point throw_pos;
+int throwNum = 0;
 
 // 激光雷达相关
 double nearest_ring[2];
@@ -51,11 +54,9 @@ cv::Mat camera_matrix = (cv::Mat_<double>(3, 3) << 1520.0, 0.0, 960.0,
 int H_direction = 0; //0就是没有，1就是left，-1就是right
 
 
-
 // -------------------------- 配置参数（无人机场景优化） --------------------------
 const float CONF_THRESHOLD = 0.4f;
-const float SEARCH_RADIUS_SCALE = 2.0f;  // 灰环中心搜索黑正方形的范围（直径2倍）
-const float INNER_IMG_SCALE = 0.7f;      // 中心图片占白色圆比例
+const float INNER_IMG_SCALE = 0.45f;      // 中心图片边长和最大灰色圆环直径之比
 const float APPROX_EPSILON = 0.03f;      // 轮廓逼近阈值（宽松，适配透视）
 const std::string ONNX_MODEL_PATH = "/home/jetson/first_task_ws/src/flight_mission/best.onnx"; // 需替换为实际模型路径
 const bool USE_GPU = false;              // 是否使用GPU推理

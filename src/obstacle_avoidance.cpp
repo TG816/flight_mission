@@ -150,20 +150,20 @@ bool collision_avoidance_mission(float target_x, float target_y, float target_z,
         else
         {
             // 将所有障碍物存入Obs.all_obs里
-            ROS_INFO("障碍物处理");
+            //ROS_INFO("障碍物处理");
             find_obstacal();
-            ROS_INFO("障碍物处理结束");
+            //ROS_INFO("障碍物处理结束");
 
             // 更新地图M.Grid
-            ROS_INFO("地图更新");
+            //ROS_INFO("地图更新");
             M.update_map(EXPAND_SPL);
-            ROS_INFO("地图更新结束");
+            //ROS_INFO("地图更新结束");
             // Astar寻路
-            ROS_INFO("开始寻路");
+            //ROS_INFO("开始寻路");
             if (M.Astar(start, end) == true)
             {
-                ROS_INFO("寻路成功");
-                ROS_INFO("多点综合");
+                //ROS_INFO("寻路成功");
+                //ROS_INFO("多点综合");
                 next = Fusion_Gpoint(5);
                 ROS_INFO("综合完成%d %d", next.x, next.y);
             }

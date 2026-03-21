@@ -203,7 +203,7 @@ int main(int argc, char **argv)
             }
             break;
         case 2: //前进1米8 (1个我的距离)
-            if (collision_avoidance_mission(1.8, 0, LOW_ALTITUDE, 0, err_max))
+            if (collision_avoidance_mission(1.8, 0, 0.5, 0, err_max))
             {
                 Delay(0.5);
             }
@@ -233,14 +233,14 @@ int main(int argc, char **argv)
             break;
         */
         case 4: //准备转圈
-            if (collision_avoidance_mission(3.7, 0.6, ALTITUDE, LEFT, err_max))
+            if (collision_avoidance_mission(3.5, 0, ALTITUDE, LEFT, err_max))
             {
                 Delay(0.5);
             }
             break;
 
         case 5:
-            if (Circle_around(3,60.0f,ALTITUDE,0.75,0.75,4.3,0, 0.8, 0.3))
+            if (Circle_around(3,60.0f,ALTITUDE,0.8,0.8,4.3,0, 0.7, 0.5))
                             /* int counts, float times, float z_h, float v0, float v1, float cx, float cy, float r_of_c, float err_max   */
                             /*设定的总圈数，设定的总时间，  设定高度 ，切向速度 ，纠正速度，圆心x坐标，圆心y坐标，  圆半径，    误差*/
                             /*
@@ -254,7 +254,7 @@ int main(int argc, char **argv)
                                 当然，实际飞行考虑更多的因素，应结合实际条件多修改参数进行调整。
                             */
             {               
-                Delay(DELAY);
+                mission_num = 6;
             }
             break;
 
@@ -264,128 +264,228 @@ int main(int argc, char **argv)
                 Delay(2);
             }
             break;
+
+        //-------------------由此进入识别投掷模块-----------------------
         case 7:
             if (onFrame(0, err_max))
             {
                 Delay(0.2);
             }
             break;
+
         case 8:
+            if(isThrow == false) {mission_num = 11;break;}
+            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
+            {
+                Delay(1.0);
+            }
+            break;
+
+        case 9:
+            if (throwObject())
+            {
+                Delay(0.1);
+            }
+            break;
+
+        case 10:
+            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
+            {
+                Delay(0.5);
+                isThrow = false;
+            }
+            break;
+        
+        case 11:
             if (collision_avoidance_mission(1.8, 1.6, ALTITUDE, 0, err_max))
             {
                 Delay(2);
             }
             break;
-        case 9:
+
+        case 12:
             if (onFrame(0, err_max))
             {
                 Delay(0.2);
             }
             break;
-        case 10:
+
+        case 13:
+            if(isThrow == false) {mission_num = 16;break;}
+            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
+            {
+                Delay(1.0);
+            }
+            break;
+
+        case 14:
+            if (throwObject())
+            {
+                Delay(0.1);
+            }
+            break;
+
+        case 15:
+            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
+            {
+                Delay(0.5);
+                isThrow = false;
+            }
+            break;
+
+        case 16:
             if (collision_avoidance_mission(1.8, -1.6, ALTITUDE, 0, err_max))
             {
                 Delay(2);
             }
             break;
-        case 11:
+
+        case 17:
             if (onFrame(0, err_max))
             {
                 Delay(0.2);
             }
             break;
-        case 12:
+
+        case 18:
+            if(isThrow == false) {mission_num = 21;break;}
+            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
+            {
+                Delay(1.0);
+            }
+            break;
+
+        case 19:
+            if (throwObject())
+            {
+                Delay(0.1);
+            }
+            break;
+
+        case 20:
+            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
+            {
+                Delay(0.5);
+                isThrow = false;
+            }
+            break;
+
+        case 21:
             if (collision_avoidance_mission(3.6, -1.6, ALTITUDE, 0, err_max))
             {
                 Delay(2);
             }
             break;
-        case 13:
+
+        case 22:
             if (onFrame(0, err_max))
             {
                 Delay(0.2);
             }
             break;
-        case 14:
+
+        case 23:
+            if(isThrow == false) {mission_num = 26;break;}
+            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
+            {
+                Delay(1.0);
+            }
+            break;
+
+        case 24:
+            if (throwObject())
+            {
+                Delay(0.1);
+            }
+            break;
+
+        case 25:
+            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
+            {
+                Delay(0.5);
+                isThrow = false;
+            }
+            break;
+
+        //-------------------由此进入穿环模块-----------------------
+
+        case 26:
             if (collision_avoidance_mission(6.0, -2.5, ALTITUDE, 0, err_max))
             {
                 Delay(DELAY);
             }
             break;
 
-        case 15:
+        case 27:
             if (collision_avoidance_mission(6.0,-2.5, 1.5, LEFT, err_max))
             {
                 Delay(0.2);
             }
             break;
-        case 16:
+
+        case 28:
             if (cross_ring(6.0, 0.0, 1.5, LEFT, err_max))
             {
                 Delay(0.2);
             }
             break;
-        case 17:
+
+        case 29:
             if (collision_avoidance_mission(6.0, 1.0, ALTITUDE, LEFT, err_max))
             {
                 Delay(DELAY);
             }
             break;
-        case 18:
-            if (/*特殊靶识别并投标函数*/1)
+
+        case 30:
+            if (detectGrayRingAndThrow(LEFT, err_max))
             {
                 Delay(DELAY);
             }
             break;
-        case 19:
+
+        case 31:
+            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
+            {
+                Delay(1.0);
+            }
+            break;
+
+        case 32:
+            if (throwObject())
+            {
+                Delay(0.1);
+            }
+            break;
+
+        case 33:
+            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
+            {
+                Delay(0.5);
+                isThrow = false;
+            }
+            break;
+
+        case 34:
             if (collision_avoidance_mission(3.5, 1.0, ALTITUDE, LEFT, err_max))
             {
                 Delay(DELAY);
             }
             break;
-        case 20:
+        case 35:
             if (collision_avoidance_mission(0, 1.6 * H_direction, ALTITUDE, LEFT, err_max))
             {
                 Delay(0.2);
             }
             break;
-        case 21:
+        case 36:
             if (collision_avoidance_mission(0, 1.6 * H_direction, ALTITUDE, 0, err_max))
             {
                 Delay(DELAY);
             }
             break;
-            
 
-            // case 11:
-            //     if (collision_avoidance_mission(3.5 , -6.3 , ALTITUDE,0, err_max))
-            //     {
-            //         Delay(DELAY);
-            //     }
-            //     break;
-
-            // case 12:
-            //     if (mission_pos_cruise(3.5 , -6.3 , ALTITUDE, 0, err_max))
-            //     {
-            //         Delay(DELAY);
-            //     }
-            //     break;
-
-            // case 13:
-            //     if (collision_avoidance_mission(0 , 0 , ALTITUDE,0, err_max))
-            //     {
-            //         Delay(DELAY);
-            //     }
-            //     break;
-
-            // case 14:
-            //     if (mission_pos_cruise(0 , 0 , ALTITUDE,0, err_max))
-            //     {
-            //         Delay(DELAY);
-            //     }
-            //     break;
-
-        case 22:
+        case 37:
             if (precision_land())
             {
                 mission_num = -1;
