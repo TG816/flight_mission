@@ -210,7 +210,7 @@ int main(int argc, char **argv)
             }
             if(ERROR_DET){
                 	ROS_WARN("开始迫降");
-                	mission_num = 17;
+                	mission_num = 13;
             }
             break;
 
@@ -245,7 +245,7 @@ int main(int argc, char **argv)
             }
             if(ERROR_DET){
                 	ROS_WARN("开始迫降");
-                	mission_num = 17;
+                	mission_num = 13;
             }
             break;
 
@@ -293,7 +293,7 @@ int main(int argc, char **argv)
             }
             if(ERROR_DET){
                 	ROS_WARN("开始迫降");
-                	mission_num = 17;
+                	mission_num = 13;
             }
             break;
         
@@ -306,63 +306,32 @@ int main(int argc, char **argv)
                 Delay(DELAY);
             }
             break;
-        case 11://从这之后是返回起飞点逻辑
-            if (mission_pos_cruise(local_pos.pose.pose.position.x,local_pos.pose.pose.position.y, ALTITUDE,0, err_max))
+    
+        case 11:
+            if (collision_avoidance_mission(4.0, 0, ALTITUDE, BACK, err_max))
             {
                 Delay(DELAY);
             }
+            if(ERROR_DET){
+                	ROS_WARN("开始迫降");
+                	mission_num = 13;
+            }
             break;
         
+
         case 12:
-            if (collision_avoidance_mission(3.42, 3.07, ALTITUDE, 0, err_max))
+        if (collision_avoidance_mission(0, 0, ALTITUDE, BACK, err_max))
             {
                 Delay(DELAY);
             }
             if(ERROR_DET){
                 	ROS_WARN("开始迫降");
-                	mission_num = 17;
+                	mission_num = 13;
             }
             break;
-        
+    
+
         case 13:
-        //向右转
-            if (mission_pos_cruise(3.42, 3.07, ALTITUDE,RIGHT, err_max))
-            {
-                Delay(DELAY);
-            }
-            break;
-
-        case 14:
-        if (collision_avoidance_mission(3.8, 0, ALTITUDE, RIGHT, err_max))
-            {
-                Delay(DELAY);
-            }
-            if(ERROR_DET){
-                	ROS_WARN("开始迫降");
-                	mission_num = 17;
-            }
-            break;
-
-        case 15:
-        //再转
-           if (mission_pos_cruise(3.8,0, ALTITUDE,BACK, err_max))
-            {
-                Delay(DELAY);
-            }
-            break;
-
-        case 16:
-          if (collision_avoidance_mission(0, 0, ALTITUDE,BACK, err_max))
-            {
-                Delay(DELAY);
-            }
-            if(ERROR_DET){
-                	ROS_WARN("开始迫降");
-                	mission_num = 17;
-            }
-            break;    
-
-        case 17:
             if (precision_land())
             {
                 mission_num = -1; // 任务结束

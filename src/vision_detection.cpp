@@ -26,11 +26,9 @@ void detect_QR_num_letter(const cv::Mat &frame){
         // 2. 高斯模糊去噪
         cv::GaussianBlur(gray, blurred, cv::Size(5, 5), 0);
         
-        // 3. 自适应阈值二值化（调整参数）
-        cv::adaptiveThreshold(blurred, binary, 255,
-                              cv::ADAPTIVE_THRESH_GAUSSIAN_C,
-                              cv::THRESH_BINARY, 15, 8);
-        
+        // 3. 自动全局阈值二值化
+       double auto_thresh = cv::threshold(blurred, binary, 0, 255, cv::THRESH_BINARY + cv::THRESH_OTSU);
+        ROS_INFO("OTSU自动计算的最优阈值：%.1f", auto_thresh);
         // 4. 形态学闭运算 - 填充字符内部空洞
         cv::Mat kernel_close = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
         cv::morphologyEx(binary, morph_closed, cv::MORPH_CLOSE, kernel_close, cv::Point(-1,-1), 2);
@@ -186,7 +184,7 @@ int i=0;
         double area = cv::contourArea(contour);
         double perimeter = cv::arcLength(contour, true);
     
-        if (area < 5000) {ROS_INFO("轮廓%d:area太小，area:%.2f",i,area); continue;}
+        if (area < 10000) {ROS_INFO("轮廓%d:area太小，area:%.2f",i,area); continue;}
         
         // 计算圆度：4 * π * area / (perimeter^2)
         double circularity = 4 * M_PI * area / (perimeter * perimeter);
@@ -277,9 +275,8 @@ bool detect_specific_char(const cv::Mat &frame, const string& target_char, cv::P
     
     // ========== 图像预处理（优化小字符识别）==========
     cv::bilateralFilter(gray, processed, 5, 50, 50);  // 双边滤波保留边缘
-    cv::adaptiveThreshold(processed,binary_contour, 255,
-                         cv::ADAPTIVE_THRESH_GAUSSIAN_C,
-                         cv::THRESH_BINARY_INV, 21, 10);  // 小字符优化参数
+    
+    double auto_thresh = cv::threshold(processed, binary_contour, 0, 255, cv::THRESH_BINARY_INV + cv::THRESH_OTSU);
     
     morph_result = binary_contour.clone();
     
@@ -331,14 +328,17 @@ bool detect_specific_char(const cv::Mat &frame, const string& target_char, cv::P
         //  确保图像连续
         cv::Mat binary_ocr_inverted_cont;
         binary_ocr_inverted.copyTo(binary_ocr_inverted_cont);
-
+       cv::Mat ocr_closed,ocr_opened;
+        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+cv::morphologyEx(binary_ocr_inverted_cont,  ocr_closed, cv::MORPH_CLOSE, kernel, cv::Point(-1,-1), 2);
+ cv::morphologyEx(ocr_closed, ocr_opened, cv::MORPH_OPEN, kernel, cv::Point(-1,-1), 1);
         // Tesseract 识别
         api->SetVariable("tessedit_char_whitelist", target_char.c_str());
-        api->SetImage((uchar*)binary_ocr_inverted_cont.data, 
-                      binary_ocr_inverted_cont.cols, 
-                      binary_ocr_inverted_cont.rows, 
+        api->SetImage((uchar*)ocr_opened.data, 
+                      ocr_opened.cols, 
+                      ocr_opened.rows, 
                       1, 
-                      binary_ocr_inverted_cont.step);  // 使用 step
+                      ocr_opened.step);  // 使用 step
 
      int conf = api->MeanTextConf();
      char* outText = api->GetUTF8Text();
@@ -369,8 +369,8 @@ if (char_matched && conf >= MIN_CONFIDENCE) {
                 std::string roi_path = "/home/jetson/first_task_ws/src/flight_mission/data/char_roi.png";
                 cv::imwrite(roi_path, char_roi);
                 
-                std::string binary_path = "/home/jetson/first_task_ws/src/flight_mission/data/binary_roi.png";
-                cv::imwrite(binary_path, binary_ocr_inverted);
+                std::string opened_path = "/home/jetson/first_task_ws/src/flight_mission/data/opened_roi.png";
+                cv::imwrite(opened_path, ocr_opened);
                 
                 ROS_INFO("更新最佳候选：置信度=%d", conf);
             }
