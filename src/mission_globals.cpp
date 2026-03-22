@@ -56,7 +56,8 @@ int H_direction = 0; //0就是没有，1就是left，-1就是right
 
 // -------------------------- 配置参数（无人机场景优化） --------------------------
 const float CONF_THRESHOLD = 0.4f;
-const float INNER_IMG_SCALE = 0.45f;      // 中心图片边长和最大灰色圆环直径之比
+const float SEARCH_RADIUS_SCALE = 2.0f;  // 灰环中心搜索黑正方形的范围（直径2倍）
+const float INNER_IMG_SCALE = 0.7f;      // 中心图片占白色圆比例
 const float APPROX_EPSILON = 0.03f;      // 轮廓逼近阈值（宽松，适配透视）
 const std::string ONNX_MODEL_PATH = "/home/jetson/first_task_ws/src/flight_mission/best.onnx"; // 需替换为实际模型路径
 const bool USE_GPU = false;              // 是否使用GPU推理
@@ -78,7 +79,7 @@ bool isinit = false;
 double init_x = 0, init_y = 0, init_z = 0, init_yaw = 0;
 
 // 类实例化
-ring all_ring(0.14, 0.06, 0.85, 0.05);
+ring all_ring(0.14, 0.06, 0.80, 0.15);
 ring z_ring(0.25, 0.1, 0.85, 0.20);
 Obstacle Obs;
 Map M(map_width, map_length, map_cellsize);

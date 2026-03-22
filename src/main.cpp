@@ -240,7 +240,7 @@ int main(int argc, char **argv)
             break;
 
         case 5:
-            if (Circle_around(3,60.0f,ALTITUDE,0.8,0.8,4.3,0, 0.7, 0.5))
+            if (Circle_around(COUNTS,TIMES,ALTITUDE,0.8,0.8,4.3,0, 0.7, 0.5))
                             /* int counts, float times, float z_h, float v0, float v1, float cx, float cy, float r_of_c, float err_max   */
                             /*设定的总圈数，设定的总时间，  设定高度 ，切向速度 ，纠正速度，圆心x坐标，圆心y坐标，  圆半径，    误差*/
                             /*
@@ -410,21 +410,21 @@ int main(int argc, char **argv)
         //-------------------由此进入穿环模块-----------------------
 
         case 26:
-            if (collision_avoidance_mission(6.0, -2.5, ALTITUDE, 0, err_max))
+            if (collision_avoidance_mission(6.0, -2.4, ALTITUDE, 0, err_max))
             {
                 Delay(DELAY);
             }
             break;
 
         case 27:
-            if (collision_avoidance_mission(6.0,-2.5, 1.5, LEFT, err_max))
+            if (collision_avoidance_mission(6.0,-2.4, RING_ALTITUDE, LEFT, err_max))
             {
                 Delay(0.2);
             }
             break;
 
         case 28:
-            if (cross_ring(6.0, 0.0, 1.5, LEFT, err_max))
+            if (cross_ring(6.0, 0, RING_ALTITUDE, LEFT, err_max))
             {
                 Delay(0.2);
             }
@@ -433,7 +433,7 @@ int main(int argc, char **argv)
         case 29:
             if (collision_avoidance_mission(6.0, 1.0, ALTITUDE, LEFT, err_max))
             {
-                Delay(DELAY);
+                Delay(1.0);
             }
             break;
 
@@ -479,7 +479,7 @@ int main(int argc, char **argv)
             }
             break;
         case 36:
-            if (collision_avoidance_mission(0, 1.6 * H_direction, ALTITUDE, 0, err_max))
+            if (collision_avoidance_mission(0, 1.6 * H_direction,0.5, 0, err_max))
             {
                 Delay(DELAY);
             }

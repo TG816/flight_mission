@@ -50,6 +50,7 @@ bool precision_land()
         precision_land_init_position_y = local_pos.pose.pose.position.y;
         precision_land_last_time = ros::Time::now();
         precision_land_init_position_flag = true;
+        return false;
     }
     setpoint_raw.position.x = precision_land_init_position_x;
     setpoint_raw.position.y = precision_land_init_position_y;
@@ -73,12 +74,12 @@ bool move_in_drone_coordinate(double x, double y, double z, double target_yaw, d
     // ROS_ERROR("(%f,%f,%f)", z, init_z, local_pos.pose.pose.position.z);
     if (mode)
     {
-        return mission_pos_cruise(x + init_x, y + init_y, ALTITUDE, target_yaw + init_yaw, err_max);
+        return mission_pos_cruise(x + init_x, y + init_y, RING_ALTITUDE, target_yaw + init_yaw, err_max);
     }
     else
     {
         ROS_WARN("yaw,target_yaw,init_yaw:(%f,%f,%f)", yaw, target_yaw, init_yaw);
-        return mission_pos_cruise(x + init_x, y + init_y, z + init_z, target_yaw + init_yaw, err_max);
+        return mission_pos_cruise(x + init_x, y + init_y,RING_ALTITUDE, target_yaw + init_yaw, err_max);
     }
 }
 

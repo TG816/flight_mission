@@ -55,20 +55,55 @@ bool onFrame(float t_yaw, double err_max) {
     float drone_x = static_cast<float>(local_pos.pose.pose.position.x);
     float drone_y = static_cast<float>(local_pos.pose.pose.position.y);
     
-    float dx = target_x - drone_x;
-    float dy = target_y - drone_y;
+
+     geometry_msgs::Point target_w = change_to_world(target_x,target_y);
+
+    // 7. （传入靶子中心坐标）
+    throw_pos = {target_w.x, target_w.y};
+    isThrow = true;
+
+    float dx = throw_pos.x - drone_x;
+    float dy = throw_pos.x - drone_y;
 
     ROS_INFO("[onFrame] 识别到二维码目标 | 类别：%s | 靶子中心：(%.1f,%.1f) | 无人机位置：(%.1f,%.1f) | 偏移(x/y)：%.2f/%.2f",
              det_res.class_name.c_str(), // 修复：target_class → class_name
-             target_x, target_y,
+             throw_pos.x,throw_pos.y,
              drone_x, drone_y,
              dx, dy);
 
-    // 7. 调用投掷函数（传入靶子中心坐标）
-    throwObject({target_x, target_y}, t_yaw, err_max);
-
     return true;
 }
+
+bool detectGrayRingAndThrow(float throw_yaw, double err_max) {
+    // 1. 输入校验：图像帧为空直接返回失败
+    if (current_frame.empty()) {
+        ROS_ERROR("[detectGrayRingAndThrow] 输入图像帧为空，灰环检测失败");
+        return false;
+    }
+
+    // 2. 核心：仅检测灰色圆环（复用原有灰环检测逻辑）
+    cv::Point gray_center;   // 灰环中心坐标
+    cv::Rect gray_rect;      // 灰环包围矩形
+    int gray_radius = 0;     // 灰环半径
+    if (!findGrayRingCenter(current_frame, gray_center, gray_rect, gray_radius)) {
+        ROS_WARN("[detectGrayRingAndThrow] 未检测到灰色圆环，投掷失败");
+        return false;
+    }
+
+    // 4. 转换坐标（像素坐标→无人机世界坐标，适配throwObject入参）
+    geometry_msgs::Point target_pos = change_to_world(gray_center.x, gray_center.y);
+
+    // 5. （传入灰环中心+偏航角+误差阈值）
+    throw_pos = {target_pos.x, target_pos.y};
+    isThrow = true;
+
+    ROS_INFO("[detectGrayRingAndThrow] 调用投掷函数 | 靶标位置：(%.2f,%.2f) | 目标偏航：%.2f | 误差阈值：%.2f",
+             throw_pos.x,throw_pos.y, throw_yaw, err_max);
+
+    // 6. 返回成功
+    return true;
+}
+
 
 
 // -------------------------- 工具函数 --------------------------

@@ -26,7 +26,7 @@ void stick::FindStick(std::vector<float> p)
                     {
                     	 if(!stick_angle.empty()){
                     	 	auto it = stick_angle.end() - 1;
-                    	 	if(start - (*it).end <= 2){
+                    	 	if(start - (*it).end <= 3 && fabs(p[start] - p[(*it).end]) < 0.3){
                     	 		start = (*it).start;
                     	 		stick_angle.pop_back();
                     	 		ROS_WARN("这个⬆️不算");
@@ -35,7 +35,7 @@ void stick::FindStick(std::vector<float> p)
                     	 len = call_len(p, start, end);
                     	 if (len < stick_width + std_stick_err && len > stick_width - std_stick_err){
                         stick_angle.push_back(Angle(start, end));
-                        ROS_INFO("添加障碍物(%d,%d)，宽度%f", start, end, len);
+                        ROS_INFO("添加障碍物距离 %fm 范围(%d,%d)，宽度%f",p[end],start, end, len);
                         }
                     }
                 }else continue;
@@ -83,7 +83,7 @@ bool ring::IsRing(std::vector<float> p)
         {
             len = call_len(p, R_one->end, L_one->start);
             int rs = (int)R_one->end, re = (int)L_one->start;
-            ROS_INFO("障碍物距离 %f m", len);
+            ROS_INFO("障碍物间距 %f m", len);
             if (len < inner_width + std_ring_err && len > inner_width - std_ring_err)
             {
                 for (int i = rs + 1; i < re; i++)
@@ -121,7 +121,7 @@ void ring::NearestRing(std::vector<float> p)
     // min_i->y=(cal_y(min_i->R.start-90)+cal_y(min_i->R.end-90))/2;
     // return *min_i;
 
-    ROS_INFO("min_i->R=(%f + %f)", min_i->R.start, min_i->R.end);
+    ROS_INFO("min_i->R=(%d + %d)", min_i->R.start, min_i->R.end);
     ROS_INFO("nearest_ring[0]=(%f + %f) /2 ", cal_x(p, min_i->R.start), cal_x(p, min_i->R.end));
     ROS_INFO("nearest_ring[1]=(%f + %f) /2 ", cal_y(p, min_i->R.start), cal_y(p, min_i->R.end));
     nearest_ring[0] = (cal_x(p, min_i->R.start) + cal_x(p, min_i->R.end)) / 2;
@@ -149,7 +149,7 @@ bool cross_ring(double x, double y, double z, double t_yaw, double err_max)
             display[0] = nearest_ring[0];
             display[1] = nearest_ring[1];
             rotation(-yaw, display[0], display[1]);
-            if (distance_r < total_distance && display[0] + local_pos.pose.pose.position.x < 5 && display[1] + local_pos.pose.pose.position.y < 5 && display[0] + local_pos.pose.pose.position.x > 0)
+            if (distance_r < total_distance && display[0] + local_pos.pose.pose.position.x < MAX_X && display[1] + local_pos.pose.pose.position.y < MAX_Y && display[0] + local_pos.pose.pose.position.x > MIN_X)
             {
                 
                 ROS_WARN("发现圆环，环中心位置(%f,%f)", display[0] + local_pos.pose.pose.position.x, display[1] + local_pos.pose.pose.position.y);
@@ -170,9 +170,9 @@ bool cross_ring(double x, double y, double z, double t_yaw, double err_max)
     {
         switch (mode)
         {
-        case 1:
+        case 1:   //粗校准
         {
-            if (move_in_drone_coordinate(nearest_ring[0] - 1.2, nearest_ring[1], 0, 0, err_max))
+            if (move_in_drone_coordinate(nearest_ring[0] - 0.7, nearest_ring[1], 0, 0, err_max))
             {
                 isinit = false;
                 ROS_INFO("对准水平中心位置！");
@@ -180,9 +180,9 @@ bool cross_ring(double x, double y, double z, double t_yaw, double err_max)
             }
             break;
         }
-        case 2:
+        case 2: //二次识别
         {
-            if (counts % 30 && !is_exist_ring(all_ring, distance_bins_rotate))
+            if (counts % 30 && !is_exist_ring(all_ring, distance_bins_rotate)) //多识别几次提高容错
             {
                 ROS_INFO("第%d次判断", counts);
                 counts++;
@@ -216,7 +216,7 @@ bool cross_ring(double x, double y, double z, double t_yaw, double err_max)
         }
         case 3:
         {
-            if (move_in_drone_coordinate(nearest_ring[0] - 1.2, nearest_ring[1], 0, 0, err_max, 1))            {
+            if (move_in_drone_coordinate(nearest_ring[0] - 0.5, nearest_ring[1], 0, 0, err_max, 1)){ //精校准
                 isinit = false;
                 ROS_INFO("水平位置矫正完成！");
                 mode = 6;
@@ -266,7 +266,7 @@ bool cross_ring(double x, double y, double z, double t_yaw, double err_max)
         // }
         case 6:
         {
-            if (move_in_drone_coordinate(1.4, 0, 0.1, 0, err_max))
+            if (move_in_drone_coordinate(2.0, 0, 0.05, 0, err_max))
             {
                 isinit = false;
                 ROS_INFO("穿环完成！");

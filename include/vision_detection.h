@@ -17,5 +17,6 @@ bool detectQRCodeAndExtractInfo();
 UavDetectResult detectUavTarget();
 bool onFrame(float t_yaw,double err_max);
 std::string decodeQRCode(const cv::Mat& frame);
+bool detectGrayRingAndThrow(float throw_yaw, double err_max);
 
 #endif

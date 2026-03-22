@@ -164,7 +164,7 @@ bool collision_avoidance_mission(float target_x, float target_y, float target_z,
             {
                 //ROS_INFO("寻路成功");
                 //ROS_INFO("多点综合");
-                next = Fusion_Gpoint(5);
+                next = Fusion_Gpoint(7);
                 ROS_INFO("综合完成%d %d", next.x, next.y);
             }
             else

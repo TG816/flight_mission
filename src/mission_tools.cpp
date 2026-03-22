@@ -125,7 +125,7 @@ bool isobs(double x, double y, double total)
     int n_angle = angle / 3.1415926 * 180 + 360;
     int str_angle = n_angle % 360;
     //ROS_WARN("angle,n_angle,str_angle:%f %d %d",angle,n_angle,str_angle);
-    for (int i = str_angle - 15; i < str_angle + 15; i++)
+    for (int i = str_angle - 30; i < str_angle + 30; i++)
     {
         int instead_i = (i + 360) % 360;
         if (distance_bins[instead_i] < total)

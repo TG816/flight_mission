@@ -49,8 +49,12 @@ using namespace std;
 *************************************************************************/
 #define ALTITUDE 2.0f
 #define LOW_ALTITUDE 0.5f //待定
-#define COUNTS 1  // 需要无人机转的圈数                        //待定，目标是超过70圈
-#define TIMES 420  //转圈的最大时长，一旦超时剩多少圈都不转了    //7分钟？
+#define RING_ALTITUDE 1.45f  //由于仿真环境与真实比赛场地有差异，具体高度一定要进行实地考察 比赛改为 1.5/1.6
+#define MAX_X 6.6f
+#define MAX_Y -1.0f
+#define MIN_X 5.4f
+#define COUNTS 3  // 需要无人机转的圈数                        //待定，目标是超过70圈
+#define TIMES 60.0f  //转圈的最大时长，一旦超时剩多少圈都不转了    //7分钟？
 #define OBSTACLE_WIDTH 0.3
 #define EPS 1e-3
 #define EXPAND_ONE 8
@@ -72,6 +76,8 @@ extern float init_position_y_take_off;
 extern float init_position_z_take_off;
 extern float init_yaw_take_off;
 extern bool flag_init_position;
+extern bool isThrow;
+extern int throwNum;
 
 // 激光雷达相关
 extern double nearest_ring[2];
@@ -159,6 +165,8 @@ struct Point
     Point(double x_ = 0.0f, double y_ = 0.0f) : x(x_), y(y_) {}
     Point(const Point &p) = default;
 };
+
+extern Point throw_pos;
 
 struct GridPoint
 {
