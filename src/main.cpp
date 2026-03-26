@@ -15,6 +15,7 @@ float if_debug = 0;
 float err_max = 0.2;
 bool delay = false;
 ros::Time last_request;
+bool test_ego = true;//=====================================================
 void print_param()
 {
     std::cout << "=== 控制参数 ===" << std::endl;
@@ -41,6 +42,7 @@ void Delay(float delay_time)
             ROS_INFO("延时结束");
             delay = false;
             mission_num += 1;
+            ego_check = false;
         }
     }
     else
@@ -72,6 +74,20 @@ int main(int argc, char **argv)
     ros::ServiceClient arming_client = nh.serviceClient<mavros_msgs::CommandBool>("mavros/cmd/arming");
     ros::ServiceClient set_mode_client = nh.serviceClient<mavros_msgs::SetMode>("mavros/set_mode");
     ros::ServiceClient ctrl_pwm_client = nh.serviceClient<mavros_msgs::CommandLong>("mavros/cmd/command");
+
+    // ==================== EGO 初始化 ====================
+    
+    // 订阅ego_planner规划出来的结果
+    ros::Subscriber ego_sub = nh.subscribe("/position_cmd", 100, ego_sub_cb);
+
+    // 发布ego_planner目标
+    planner_goal_pub = nh.advertise<geometry_msgs::PoseStamped>("/ego_planner/goal", 100);
+
+    ros::Subscriber rec_traj_sub = nh.subscribe("/rec_traj", 100, rec_traj_cb);
+
+    finish_ego_pub = nh.advertise<std_msgs::Bool>("/finish_ego", 1);
+    // =====================================================
+
 
     // 设置话题发布频率，需要大于2Hz，飞控连接有500ms的心跳包
     ros::Rate rate(20);
@@ -197,300 +213,329 @@ int main(int argc, char **argv)
         switch (mission_num)
         {
         case 1:  //起飞
-            if (mission_pos_cruise(0, 0, ALTITUDE, 0, err_max))
+            if (pub_ego_goal(0, 0, 1.2, ego_err_max))
             {
                 Delay(DELAY);
             }
             break;
-        case 2: //前进1米8 (1个我的距离)
-            if (collision_avoidance_mission(1.8, 0, 0.5, 0, err_max))
+
+        //=======================测试===========================
+        
+        case 2:
+            if (pub_ego_goal(4.0, -5.0, 1.2, ego_err_max))
             {
                 Delay(0.5);
-            }
-            break;
-        case 3: //扫码
-            if (detectQRCodeAndExtractInfo())
-            {
-                mission_num = 4; // 理论上完全可以Delay(0);
-            }
-            break;
-        /* 
-
-            //此处保留了原来的逻辑，需要对比时方便修改。
-
-        case 4: // 准备转圈
-            if (collision_avoidance_mission(3.7, 0.6, ALTITUDE, 0, err_max))
-            {
-                Delay(0.5);
-            }
-            break;
-
-        case 5:
-            if (Circle_around(COUNTS, TIMES, err_max))
-            {
-                Delay(DELAY);
-            }
-            break;
-        */
-        case 4: //准备转圈
-            if (collision_avoidance_mission(3.5, 0, ALTITUDE, LEFT, err_max))
-            {
-                Delay(0.5);
-            }
-            break;
-
-        case 5:
-            if (Circle_around(COUNTS,TIMES,ALTITUDE,0.8,0.8,4.3,0, 0.7, 0.5))
-                            /* int counts, float times, float z_h, float v0, float v1, float cx, float cy, float r_of_c, float err_max   */
-                            /*设定的总圈数，设定的总时间，  设定高度 ，切向速度 ，纠正速度，圆心x坐标，圆心y坐标，  圆半径，    误差*/
-                            /*
-                            函数使用事项：
-                            1.切向速度指无人机绕圆周转动速度。
-                            2.纠正速度指无人机偏离圆周时将其拉回轨道的速度（理论上并不等于这个值，因为偏离圆周越远，这个速度就越大，但这个设定值能决定偏离速度随位置偏移的变化率
-                            3.建议纠正速度 >= 切向速度
-                            4.如果增大切向速度v，也应适度增大r_of_c
-                            5.误差建议在0.3-0.5，但切记要保证误差不能大于 r_of_c,而且二者也不要太接近，这个误差最好不要设置太小，因为他不会影响飞行，单纯起到计数作用。
-                            6.理论上一圈飞行时间为2PI*r/v, a = v^2/r,得到t = 2PI*v/a, 要保证时间尽量短而加速度尽量小（更稳定）的情况下，应同步减小v和r，即半径越小，速度适当减小，转的越快
-                                当然，实际飞行考虑更多的因素，应结合实际条件多修改参数进行调整。
-                            */
-            {               
-                mission_num = 6;
-            }
-            break;
-
-        case 6:
-            if (collision_avoidance_mission(3.6, 1.6, ALTITUDE, 0, err_max))
-            {
-                Delay(2);
-            }
-            break;
-
-        //-------------------由此进入识别投掷模块-----------------------
-        case 7:
-            if (onFrame(0, err_max))
-            {
-                Delay(0.2);
-            }
-            break;
-
-        case 8:
-            if(isThrow == false) {mission_num = 11;break;}
-            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
-            {
-                Delay(1.0);
-            }
-            break;
-
-        case 9:
-            if (throwObject())
-            {
-                Delay(0.1);
-            }
-            break;
-
-        case 10:
-            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
-            {
-                Delay(0.5);
-                isThrow = false;
             }
             break;
         
-        case 11:
-            if (collision_avoidance_mission(1.8, 1.6, ALTITUDE, 0, err_max))
-            {
-                Delay(2);
-            }
-            break;
-
-        case 12:
-            if (onFrame(0, err_max))
-            {
-                Delay(0.2);
-            }
-            break;
-
-        case 13:
-            if(isThrow == false) {mission_num = 16;break;}
-            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
-            {
-                Delay(1.0);
-            }
-            break;
-
-        case 14:
-            if (throwObject())
-            {
-                Delay(0.1);
-            }
-            break;
-
-        case 15:
-            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
+        case 3:
+            if (pub_ego_goal(0.0, 0.0, 1.2, ego_err_max))
             {
                 Delay(0.5);
-                isThrow = false;
             }
             break;
-
-        case 16:
-            if (collision_avoidance_mission(1.8, -1.6, ALTITUDE, 0, err_max))
-            {
-                Delay(2);
-            }
-            break;
-
-        case 17:
-            if (onFrame(0, err_max))
-            {
-                Delay(0.2);
-            }
-            break;
-
-        case 18:
-            if(isThrow == false) {mission_num = 21;break;}
-            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
-            {
-                Delay(1.0);
-            }
-            break;
-
-        case 19:
-            if (throwObject())
-            {
-                Delay(0.1);
-            }
-            break;
-
-        case 20:
-            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
-            {
-                Delay(0.5);
-                isThrow = false;
-            }
-            break;
-
-        case 21:
-            if (collision_avoidance_mission(3.6, -1.6, ALTITUDE, 0, err_max))
-            {
-                Delay(2);
-            }
-            break;
-
-        case 22:
-            if (onFrame(0, err_max))
-            {
-                Delay(0.2);
-            }
-            break;
-
-        case 23:
-            if(isThrow == false) {mission_num = 26;break;}
-            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
-            {
-                Delay(1.0);
-            }
-            break;
-
-        case 24:
-            if (throwObject())
-            {
-                Delay(0.1);
-            }
-            break;
-
-        case 25:
-            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
-            {
-                Delay(0.5);
-                isThrow = false;
-            }
-            break;
-
-        //-------------------由此进入穿环模块-----------------------
-
-        case 26:
-            if (collision_avoidance_mission(6.0, -2.4, ALTITUDE, 0, err_max))
-            {
-                Delay(DELAY);
-            }
-            break;
-
-        case 27:
-            if (collision_avoidance_mission(6.0,-2.4, RING_ALTITUDE, LEFT, err_max))
-            {
-                Delay(0.2);
-            }
-            break;
-
-        case 28:
-            if (cross_ring(6.0, 0, RING_ALTITUDE, LEFT, err_max))
-            {
-                Delay(0.2);
-            }
-            break;
-
-        case 29:
-            if (collision_avoidance_mission(6.0, 1.0, ALTITUDE, LEFT, err_max))
-            {
-                Delay(1.0);
-            }
-            break;
-
-        case 30:
-            if (detectGrayRingAndThrow(LEFT, err_max))
-            {
-                Delay(DELAY);
-            }
-            break;
-
-        case 31:
-            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
-            {
-                Delay(1.0);
-            }
-            break;
-
-        case 32:
-            if (throwObject())
-            {
-                Delay(0.1);
-            }
-            break;
-
-        case 33:
-            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
-            {
-                Delay(0.5);
-                isThrow = false;
-            }
-            break;
-
-        case 34:
-            if (collision_avoidance_mission(3.5, 1.0, ALTITUDE, LEFT, err_max))
-            {
-                Delay(DELAY);
-            }
-            break;
-        case 35:
-            if (collision_avoidance_mission(0, 1.6 * H_direction, ALTITUDE, LEFT, err_max))
-            {
-                Delay(0.2);
-            }
-            break;
-        case 36:
-            if (collision_avoidance_mission(0, 1.6 * H_direction,0.5, 0, err_max))
-            {
-                Delay(DELAY);
-            }
-            break;
-
-        case 37:
+        
+        case 4:
             if (precision_land())
             {
                 mission_num = -1;
             }
             break;
+        
+        //=======================测试==============================
+        
+        // case 2: //前进1米8 (1个我的距离)
+        //     if (ego_planner(1.8, 0, 0.5, 0, err_max))
+        //     {
+        //         Delay(0.5);
+        //     }
+        //     break;
+        // case 3: //扫码
+        //     if (detectQRCodeAndExtractInfo())
+        //     {
+        //         mission_num = 4; // 理论上完全可以Delay(0);
+        //     }
+        //     break;
+        // /* 
+
+        //     //此处保留了原来的逻辑，需要对比时方便修改。
+
+        // case 4: // 准备转圈
+        //     if (ego_planner(3.7, 0.6, ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(0.5);
+        //     }
+        //     break;
+
+        // case 5:
+        //     if (Circle_around(COUNTS, TIMES, err_max))
+        //     {
+        //         Delay(DELAY);
+        //     }
+        //     break;
+        // */
+        // case 4: //准备转圈
+        //     if (ego_planner(3.5, 0, ALTITUDE, LEFT, err_max))
+        //     {
+        //         Delay(0.5);
+        //     }
+        //     break;
+
+        // case 5:
+        //     if (Circle_around(COUNTS,TIMES,ALTITUDE,0.8,0.8,4.3,0, 0.7, 0.5))
+        //                     /* int counts, float times, float z_h, float v0, float v1, float cx, float cy, float r_of_c, float err_max   */
+        //                     /*设定的总圈数，设定的总时间，  设定高度 ，切向速度 ，纠正速度，圆心x坐标，圆心y坐标，  圆半径，    误差*/
+        //                     /*
+        //                     函数使用事项：
+        //                     1.切向速度指无人机绕圆周转动速度。
+        //                     2.纠正速度指无人机偏离圆周时将其拉回轨道的速度（理论上并不等于这个值，因为偏离圆周越远，这个速度就越大，但这个设定值能决定偏离速度随位置偏移的变化率
+        //                     3.建议纠正速度 >= 切向速度
+        //                     4.如果增大切向速度v，也应适度增大r_of_c
+        //                     5.误差建议在0.3-0.5，但切记要保证误差不能大于 r_of_c,而且二者也不要太接近，这个误差最好不要设置太小，因为他不会影响飞行，单纯起到计数作用。
+        //                     6.理论上一圈飞行时间为2PI*r/v, a = v^2/r,得到t = 2PI*v/a, 要保证时间尽量短而加速度尽量小（更稳定）的情况下，应同步减小v和r，即半径越小，速度适当减小，转的越快
+        //                         当然，实际飞行考虑更多的因素，应结合实际条件多修改参数进行调整。
+        //                     */
+        //     {               
+        //         mission_num = 6;
+        //     }
+        //     break;
+
+        // case 6:
+        //     if (ego_planner(3.6, 1.6, ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(2);
+        //     }
+        //     break;
+
+        // //-------------------由此进入识别投掷模块-----------------------
+        // case 7:
+        //     if (onFrame(0, err_max))
+        //     {
+        //         Delay(0.2);
+        //     }
+        //     break;
+
+        // case 8:
+        //     if(isThrow == false) {mission_num = 11;break;}
+        //     if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(1.0);
+        //     }
+        //     break;
+
+        // case 9:
+        //     if (throwObject())
+        //     {
+        //         Delay(0.1);
+        //     }
+        //     break;
+
+        // case 10:
+        //     if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(0.5);
+        //         isThrow = false;
+        //     }
+        //     break;
+        
+        // case 11:
+        //     if (ego_planner(1.8, 1.6, ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(2);
+        //     }
+        //     break;
+
+        // case 12:
+        //     if (onFrame(0, err_max))
+        //     {
+        //         Delay(0.2);
+        //     }
+        //     break;
+
+        // case 13:
+        //     if(isThrow == false) {mission_num = 16;break;}
+        //     if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(1.0);
+        //     }
+        //     break;
+
+        // case 14:
+        //     if (throwObject())
+        //     {
+        //         Delay(0.1);
+        //     }
+        //     break;
+
+        // case 15:
+        //     if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(0.5);
+        //         isThrow = false;
+        //     }
+        //     break;
+
+        // case 16:
+        //     if (ego_planner(1.8, -1.6, ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(2);
+        //     }
+        //     break;
+
+        // case 17:
+        //     if (onFrame(0, err_max))
+        //     {
+        //         Delay(0.2);
+        //     }
+        //     break;
+
+        // case 18:
+        //     if(isThrow == false) {mission_num = 21;break;}
+        //     if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(1.0);
+        //     }
+        //     break;
+
+        // case 19:
+        //     if (throwObject())
+        //     {
+        //         Delay(0.1);
+        //     }
+        //     break;
+
+        // case 20:
+        //     if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(0.5);
+        //         isThrow = false;
+        //     }
+        //     break;
+
+        // case 21:
+        //     if (ego_planner(3.6, -1.6, ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(2);
+        //     }
+        //     break;
+
+        // case 22:
+        //     if (onFrame(0, err_max))
+        //     {
+        //         Delay(0.2);
+        //     }
+        //     break;
+
+        // case 23:
+        //     if(isThrow == false) {mission_num = 26;break;}
+        //     if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(1.0);
+        //     }
+        //     break;
+
+        // case 24:
+        //     if (throwObject())
+        //     {
+        //         Delay(0.1);
+        //     }
+        //     break;
+
+        // case 25:
+        //     if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(0.5);
+        //         isThrow = false;
+        //     }
+        //     break;
+
+        // //-------------------由此进入穿环模块-----------------------
+
+        // case 26:
+        //     if (ego_planner(6.0, -2.4, ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(DELAY);
+        //     }
+        //     break;
+
+        // case 27:
+        //     if (ego_planner(6.0,-2.4, RING_ALTITUDE, LEFT, err_max))
+        //     {
+        //         Delay(0.2);
+        //     }
+        //     break;
+
+        // case 28:
+        //     if (cross_ring(6.0, 0, RING_ALTITUDE, LEFT, err_max))
+        //     {
+        //         Delay(0.2);
+        //     }
+        //     break;
+
+        // case 29:
+        //     if (ego_planner(6.0, 1.0, ALTITUDE, LEFT, err_max))
+        //     {
+        //         Delay(1.0);
+        //     }
+        //     break;
+
+        // case 30:
+        //     if (detectGrayRingAndThrow(LEFT, err_max))
+        //     {
+        //         Delay(DELAY);
+        //     }
+        //     break;
+
+        // case 31:
+        //     if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(1.0);
+        //     }
+        //     break;
+
+        // case 32:
+        //     if (throwObject())
+        //     {
+        //         Delay(0.1);
+        //     }
+        //     break;
+
+        // case 33:
+        //     if (mission_pos_cruise(throw_pos.x ,throw_pos.y, ALTITUDE, 0, err_max))
+        //     {
+        //         Delay(0.5);
+        //         isThrow = false;
+        //     }
+        //     break;
+
+        // case 34:
+        //     if (ego_planner(3.5, 1.0, ALTITUDE, LEFT, err_max))
+        //     {
+        //         Delay(DELAY);
+        //     }
+        //     break;
+        // case 35:
+        //     if (ego_planner(0, 1.6 * H_direction, ALTITUDE, LEFT, err_max))
+        //     {
+        //         Delay(0.2);
+        //     }
+        //     break;
+        // case 36:
+        //     if (ego_planner(0, 1.6 * H_direction,0.5, 0, err_max))
+        //     {
+        //         Delay(DELAY);
+        //     }
+        //     break;
+
+        // case 37:
+        //     if (precision_land())
+        //     {
+        //         mission_num = -1;
+        //     }
+        //     break;
+
+        //非测试情况
+
         }
         mavros_setpoint_pos_pub.publish(setpoint_raw);
         ros::spinOnce();

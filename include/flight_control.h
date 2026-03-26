@@ -13,4 +13,9 @@ void fly(float v);
 bool Circle_around(int counts, float times, double err_max);
 bool Circle_around(int counts, float times, float z_h, float v0, float v1, float cx, float cy, float r_of_c, float err_max);
 bool throwObject();
+bool pub_ego_goal(float x, float y, float z, float err_max);
+void PI_attitude_control();
+bool current_position_cruise(float x, float y, float z, float target_yaw, float error_max);
+
+
 #endif

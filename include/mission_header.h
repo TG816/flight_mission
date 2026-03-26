@@ -39,6 +39,7 @@
 #include <onnxruntime_cxx_api.h> //yolo新加
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <quadrotor_msgs/PositionCommand.h>
 // 动态参数
 // 回退逻辑
 
@@ -47,7 +48,7 @@ using namespace std;
 /************************************************************************
 全局常量定义
 *************************************************************************/
-#define ALTITUDE 2.0f
+#define ALTITUDE 1.0f
 #define LOW_ALTITUDE 0.5f //待定
 #define RING_ALTITUDE 1.45f  //由于仿真环境与真实比赛场地有差异，具体高度一定要进行实地考察 比赛改为 1.5/1.6
 #define MAX_X 6.6f
@@ -78,6 +79,9 @@ extern float init_yaw_take_off;
 extern bool flag_init_position;
 extern bool isThrow;
 extern int throwNum;
+extern float current_position_cruise_last_position_x;
+extern float current_position_cruise_last_position_y;
+extern bool current_position_cruise_flag;
 
 // 激光雷达相关
 extern double nearest_ring[2];
@@ -110,6 +114,24 @@ extern int dy[EXPAND_TWO];
 extern int Dx[EXPAND_ONE];
 extern int Dy[EXPAND_ONE];
 extern float weight[EXPAND_ONE];
+
+extern float ego_err_max;
+extern ros::Publisher planner_goal_pub;
+extern ros::Publisher finish_ego_pub;
+extern std_msgs::Bool finish_ego_flag;
+extern bool rec_traj_flag;
+extern float last_ego_sub_x;
+extern float last_ego_sub_y;
+extern quadrotor_msgs::PositionCommand ego_sub;
+extern uint32_t last_seq;
+extern double ego_now_x;
+extern double ego_now_y;
+extern float before_ego_pose_x;
+extern float before_ego_pose_y;
+extern float before_ego_pose_z;
+extern bool ego_check;
+extern ros::Time last_sub_request;
+extern bool pub_ego_goal_flag;
 
 // 视觉相关
 extern cv::Mat current_frame;
@@ -330,3 +352,9 @@ geometry_msgs::Point change_to_world(float u, float v);
 float min_obs_fuc();
 
 #endif
+
+
+
+
+  
+  

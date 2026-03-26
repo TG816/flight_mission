@@ -17,6 +17,9 @@ bool flag_init_position = false;
 bool isThrow = false;
 Point throw_pos;
 int throwNum = 0;
+float current_position_cruise_last_position_x = 0;
+float current_position_cruise_last_position_y = 0;
+bool current_position_cruise_flag = false;
 
 // 激光雷达相关
 double nearest_ring[2];
@@ -44,6 +47,29 @@ double direction = 1.0;
 float map_cellsize = 0.10f;
 float map_width = 11.0f;
 float map_length = 11.0f;
+
+/************************************************************************
+ego参数
+*************************************************************************/
+float ego_err_max = 0.2; // ego_planner到达目标点误差阈值
+ros::Publisher planner_goal_pub;
+ros::Publisher finish_ego_pub;
+std_msgs::Bool finish_ego_flag;
+
+bool rec_traj_flag = false;
+float last_ego_sub_x = 0;
+float last_ego_sub_y = 0;
+quadrotor_msgs::PositionCommand ego_sub;
+uint32_t last_seq = -1;
+double ego_now_x = 0;
+double ego_now_y = 0;
+
+float before_ego_pose_x = 0;
+float before_ego_pose_y = 0;
+float before_ego_pose_z = 0;
+bool ego_check = false;
+ros::Time last_sub_request;
+bool pub_ego_goal_flag = false;
 
 // 视觉相关
 cv::Mat current_frame;

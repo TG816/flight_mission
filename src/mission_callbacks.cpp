@@ -157,3 +157,22 @@ void image_cb(const sensor_msgs::ImageConstPtr &msg)
     current_frame = cv_ptr->image;
     got_image = true;
 }
+
+/************************************************************************
+函数1 :ego_planner导航
+*************************************************************************/
+
+void ego_sub_cb(const quadrotor_msgs::PositionCommand::ConstPtr &msg)
+{
+	ego_sub = *msg;
+}
+
+/************************************************************************
+函数2 : ego_planner是否规划出航线
+*************************************************************************/
+
+void rec_traj_cb(const std_msgs::Bool::ConstPtr &msg)
+{
+	rec_traj_flag = msg->data;
+	// ROS_WARN("rec_traj_flag: %d", rec_traj_flag);
+}

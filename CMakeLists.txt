@@ -21,6 +21,7 @@ cv_bridge
   message_generation
   livox_ros_driver
   visualization_msgs
+  quadrotor_msgs
 )
 
 # 强制找 OpenCV4，添加 objdetect（QR码解码）+ dnn（OpenCV内置ONNX可选）
