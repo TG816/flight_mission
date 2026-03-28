@@ -438,14 +438,14 @@ int main(int argc, char **argv)
             break;
 
         case 30:
-            if (detectGrayRingAndThrow(LEFT, err_max))
+            if (detectBlackSquareAndThrow(LEFT, err_max))
             {
                 Delay(DELAY);
             }
             break;
 
         case 31:
-            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE, 0, err_max))
+            if (mission_pos_cruise(throw_pos.x ,throw_pos.y, LOW_ALTITUDE,LEFT, err_max))
             {
                 Delay(1.0);
             }
