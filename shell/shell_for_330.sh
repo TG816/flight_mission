@@ -25,6 +25,10 @@ tmux send-keys -t ros_session:1 'sleep 6; rostopic echo /mavros/local_position/p
 tmux split-window -v -t ros_session:1
 tmux send-keys -t ros_session:1.1 'sleep 7; source ~/six/first_task_ws-master/devel/setup.zsh; roslaunch flight_mission flight_mission.launch' C-m
 
+# 新增：相机驱动
+tmux split-window -v -t ros_session:1
+tmux send-keys -t ros_session:1.2 'sleep 9; roslaunch complete_mission simple_camera_driver.launch' C-m
+
 # 整理第二个窗口布局
 tmux select-layout -t ros_session:1 tiled
 
