@@ -248,68 +248,27 @@ bool findInnerImageRect(const cv::Mat& frame, const cv::Point& gray_center, cons
                        cv::Rect& inner_img_rect) {
     if (black_square.empty()) return false;
 
-    cv::Mat square_roi = frame(black_square);
-    cv::Mat white_mask = getColorMask(square_roi, WHITE_LOW, WHITE_HIGH);
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(white_mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+    // ====================== ✅ 比例系数在这里！直接改这个数字！
+    float scale = 0.25f;  // 0.35 = 缩小到35%，想大就改0.4，想小改0.3
+    
+    // 等比例缩小（用上面的 scale）
+    int img_size = static_cast<int>(black_square.width * scale);
 
-    if (contours.empty()) {
-        int img_size = static_cast<int>(black_square.width * INNER_IMG_SCALE);
-        inner_img_rect = cv::Rect(
-            std::max(0, gray_center.x - img_size / 2),
-            std::max(0, gray_center.y - img_size / 2),
-            img_size,
-            img_size
-        );
-        inner_img_rect &= cv::Rect(0, 0, frame.cols, frame.rows);
-        return true;
-    }
-
-    int max_idx = 0;
-    double max_area = 0.0;
-    for (int i = 0; i < contours.size(); ++i) {
-        double area = cv::contourArea(contours[i]);
-        if (area > max_area) {
-            max_area = area;
-            max_idx = i;
-        }
-    }
-    cv::Rect white_rect = cv::boundingRect(contours[max_idx]);
-    cv::Rect white_rect_abs = cv::Rect(
-        black_square.x + white_rect.x,
-        black_square.y + white_rect.y,
-        white_rect.width,
-        white_rect.height
-    );
-    int wc_x = white_rect_abs.x + white_rect_abs.width / 2;
-    int wc_y = white_rect_abs.y + white_rect_abs.height / 2;
-    int img_w = static_cast<int>(white_rect_abs.width * INNER_IMG_SCALE);
-    int img_h = static_cast<int>(white_rect_abs.height * INNER_IMG_SCALE);
     inner_img_rect = cv::Rect(
-        std::max(0, wc_x - img_w / 2),
-        std::max(0, wc_y - img_h / 2),
-        img_w,
-        img_h
+        std::max(0, gray_center.x - img_size / 2),
+        std::max(0, gray_center.y - img_size / 2),
+        img_size,
+        img_size
     );
+
     inner_img_rect &= cv::Rect(0, 0, frame.cols, frame.rows);
 
-// 只有在矩形有效时才保存
+    // 保存图片逻辑不变
     if (inner_img_rect.width > 0 && inner_img_rect.height > 0) {
-        // 1. 从原图截取
-        cv::Mat img_roi = frame(inner_img_rect).clone(); // .clone() 防止数据被后续帧覆盖
-        
-        // 2. 生成文件名（使用静态计数器区分不同图片）
+        cv::Mat img_roi = frame(inner_img_rect).clone();
         static int img_count = 0;
         std::string filename = "/home/jetson/first_task_ws/src/flight_mission/data/center_img_" + std::to_string(img_count++) + ".jpg";
-        
-        // 3. 保存并打印日志
-        bool success = cv::imwrite(filename, img_roi);
-        if (success) {
-            ROS_INFO("[findInnerImageRect] 成功保存中心图片 | 文件: %s | 尺寸: %dx%d", 
-                     filename.c_str(), img_roi.cols, img_roi.rows);
-        } else {
-            ROS_WARN("[findInnerImageRect] 保存中心图片失败");
-        }
+        cv::imwrite(filename, img_roi);
     }
 
     return true;
