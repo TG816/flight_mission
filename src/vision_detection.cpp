@@ -355,9 +355,6 @@ UavDetectResult detectUavTarget() {
     UavDetectResult result;
     if (current_frame.empty()) return result;
 
-
-  
-
     // 步骤1：找黑色正方形
         cv::Point black_center; 
     cv::Rect black_square;    

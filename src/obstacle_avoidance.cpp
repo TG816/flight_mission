@@ -77,7 +77,7 @@ GridPoint out_of_danger(const GridPoint &now, int mode)
     {
         int count = 0;
         auto it = Path.rbegin();
-        while (it != Path.rend() && count < 2)
+        while (it != Path.rend() && count < 3)
         {
             count++;
             it++;
@@ -129,7 +129,7 @@ bool collision_avoidance_mission(float target_x, float target_y, float target_z,
     float min_obs = min_obs_fuc();
 
     // 是否处在障碍物扩张区 or 离障碍物过近
-    bool danger = (M.Grid[start.x][start.y] == 1 || min_obs < 0.34f) ? true : false;
+    bool danger = (M.Grid[start.x][start.y] == 1 || min_obs < 0.30f) ? true : false;
 
     // 如果danger，则前往最近且离终点最近的next点，几乎不可能出现的极端情况下前往附近的0点，否则正常更新
     if (danger)
